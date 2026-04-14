@@ -1,24 +1,10 @@
-# Raw dataset contents (keep folder structure, ignore actual data files)
+# Raw dataset contents (keep LAFAN/OMOMO/SFU folders, ignore their contents)
 data/00_raw_datasets/LAFAN/*
-!data/00_raw_datasets/LAFAN/lafan1/
-data/00_raw_datasets/LAFAN/lafan1/*
-!data/00_raw_datasets/LAFAN/lafan1/.gitkeep
-
+!data/00_raw_datasets/LAFAN/.gitkeep
 data/00_raw_datasets/OMOMO/*
-!data/00_raw_datasets/OMOMO/data/
-data/00_raw_datasets/OMOMO/data/*
-!data/00_raw_datasets/OMOMO/data/.gitkeep
-!data/00_raw_datasets/OMOMO/smplh/
-data/00_raw_datasets/OMOMO/smplh/*
-!data/00_raw_datasets/OMOMO/smplh/.gitkeep
-
+!data/00_raw_datasets/OMOMO/.gitkeep
 data/00_raw_datasets/SFU/*
-!data/00_raw_datasets/SFU/SFU/
-data/00_raw_datasets/SFU/SFU/*
-!data/00_raw_datasets/SFU/SFU/.gitkeep
-!data/00_raw_datasets/SFU/models_smplx_v1_1/
-data/00_raw_datasets/SFU/models_smplx_v1_1/*
-!data/00_raw_datasets/SFU/models_smplx_v1_1/.gitkeep
+!data/00_raw_datasets/SFU/.gitkeep
 
 # Python
 __pycache__/
