@@ -27,21 +27,28 @@
 
 ## Pickle Data Structure
 
-Each pickle file contains a dict. Key structure per sequence:
+Each pickle file contains a dict keyed by sequence index. Key structure per sequence entry:
 
 | Key | Shape | Description |
 |-----|-------|-------------|
-| `motion` | `(T, 24, 3)` | Global joint positions, 24 SMPL-H joints, metres |
-| `betas` | `(16,)` | SMPL-H shape parameters |
+| `seq_name` | string | Sequence ID, e.g. `"sub3_largebox_003"` |
+| `root_orient` | `(T, 3)` | Root joint orientation, axis-angle |
+| `pose_body` | `(T, 63)` | Body pose parameters, 21 joints × 3 (axis-angle) |
+| `trans` | `(T, 3)` | Root joint translation, metres |
+| `betas` | `(1, 16)` | SMPL-H shape parameters — **use `betas[0]`** to get `(16,)` |
 | `gender` | string | `"male"` / `"female"` / `"neutral"` |
-| `object_name` | string | Name of interacted object (e.g. `"largebox"`) |
-| `object_trans` | `(T, 3)` | Object root translation [x, y, z] in metres |
-| `object_orient` | `(T, 3)` | Object root rotation, axis-angle |
-| `fps` | float | Typically 30 Hz |
-| `height` | float | Subject height in metres |
+| `obj_rot` | `(T, 3, 3)` | Object rotation as **rotation matrix** (NOT axis-angle) |
+| `obj_trans` | `(T, 3, 1)` | Object translation — **use `obj_trans[:, :, 0]`** to get `(T, 3)` |
+| `obj_scale` | `(T, 1)` | Object scale |
+| `obj_com_pos` | `(T, 3)` | Object centre-of-mass position |
+| `trans2joint` | `(3,)` | Translation offset from trans to pelvis joint |
+| `rest_offsets` | `(J, 3)` | Rest-pose joint offsets |
+
+> **Note**: There is no `motion (T,24,3)` key in the raw pickle. Global joint positions are computed via SMPL-H FK from `root_orient + pose_body + trans + betas`.
 
 ### Object pose convention
-- Rotation stored as **axis-angle** `(T, 3)` → convert to quaternion with `scipy.spatial.transform.Rotation.from_rotvec()`
+- Rotation stored as **rotation matrix** `(T, 3, 3)` → convert with `scipy.spatial.transform.Rotation.from_matrix()`
+- Translation stored as `(T, 3, 1)` → reshape with `obj_trans[:, :, 0]`
 - Unified format expects quaternion **wxyz** `[qw, qx, qy, qz, x, y, z]`
 
 ---

@@ -1,0 +1,30 @@
+# InterAct — Willow WBT module config
+# Repo: wzyabcas/InterAct
+# Role: converts OMOMO raw .p pickles → .pt PyTorch tensors for holosoma object_interaction
+# Install: pip install -r src/motion_convertor/third_party/InterAct/requirements.txt
+
+env: interact
+
+# ⚠️ HARDCODED PATHS — both scripts have hardcoded relative paths, no data CLI args
+# They must be run with specific cwd values and a pre-arranged directory structure.
+# See src/motion_convertor/TODO.md (Gap 2) for full setup requirements.
+
+# Step 1 — OMOMO raw .p → sequences_canonical/ (human.npz + object.npz)
+# cwd: src/motion_convertor/third_party/InterAct/
+# Expects: ./data/omomo/raw/*.p, ./models/smplh/, ./models/smplx/
+# Outputs: ./data/omomo/sequences/{seq}/human.npz + object.npz
+entry_points:
+  process_omomo:
+    cmd: python process/process_omomo.py
+    cwd: src/motion_convertor/third_party/InterAct
+    args: {}   # no CLI arguments — paths are hardcoded
+
+  # Step 2 — sequences_canonical/ → .pt (T, 331) tensors
+  # cwd: src/motion_convertor/third_party/InterAct/simulation/
+  # Expects: ../data/omomo/sequences_canonical/, ../models/
+  # Outputs: ./intermimic/InterAct/omomo/{seq}.pt
+  interact2mimic:
+    cmd: python interact2mimic.py
+    cwd: src/motion_convertor/third_party/InterAct/simulation
+    args:
+      dataset: --dataset_name   # omomo (default)

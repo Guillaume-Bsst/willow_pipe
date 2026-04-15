@@ -1,0 +1,37 @@
+# GMR — Willow WBT module config
+# Repo: https://github.com/YanjieZe/GMR
+# Install: follow modules/01_retargeting/GMR/README.md
+
+env: gmr
+
+# Wrapper scripts (willow code, runs in gmr env to access KinematicsModel)
+wrappers:
+  fk: scripts/wrappers/gmr_fk.py    # forward kinematics: pkl + xml → body_pos_w npz
+
+# Entry points (run from repo root)
+entry_points:
+  smplx:
+    cmd: python modules/01_retargeting/GMR/scripts/smplx_to_robot.py
+    args:
+      input:  --smplx_file
+      output: --save_path
+      robot:  --robot
+  smplx_batch:
+    cmd: python modules/01_retargeting/GMR/scripts/smplx_to_robot_dataset.py
+    args:
+      input_dir:  --src_folder
+      output_dir: --tgt_folder
+      robot:      --robot
+  bvh:
+    cmd: python modules/01_retargeting/GMR/scripts/bvh_to_robot.py
+    args:
+      input:  --bvh_file
+      output: --save_path
+      robot:  --robot
+      format: --format
+  bvh_batch:
+    cmd: python modules/01_retargeting/GMR/scripts/bvh_to_robot_dataset.py
+    args:
+      input_dir:  --src_folder
+      output_dir: --tgt_folder
+      robot:      --robot

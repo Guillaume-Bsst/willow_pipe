@@ -1,0 +1,26 @@
+# holosoma_retargeting — Willow WBT module config
+# Repo: amazon-far/holosoma (src/holosoma_retargeting/)
+# Install: follow modules/third_party/holosoma/scripts/source_retargeting_setup.sh
+
+env: hsretargeting
+
+# Entry points (run from repo root)
+entry_points:
+  single:
+    cmd: python modules/01_retargeting/holosoma_retargeting/examples/robot_retarget.py
+    args:
+      input_dir:   --data_path
+      output_dir:  --save_dir
+      task_type:   --task-type       # robot_only | object_interaction | climbing
+      task_name:   --task-name
+      data_format: --data_format     # smplh | smplx | lafan | mocap
+      robot_urdf:  --robot-config.robot-urdf-file
+  batch:
+    cmd: python modules/01_retargeting/holosoma_retargeting/examples/parallel_robot_retarget.py
+    args:
+      input_dir:   --data-dir
+      output_dir:  --save_dir
+      task_type:   --task-type
+      data_format: --data_format
+      robot_urdf:  --robot-config.robot-urdf-file
+      object_name: --task-config.object-name

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "willow_wbt"
+version = "0.1.0"
+description = "Modular benchmarking and integration framework for humanoid robot Whole-Body Tracking"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "pyyaml",
+    "joblib",
+    "smplx",
+    "bvhio",
+    "mujoco",
+    "torch",
+    # human_body_prior is required for OMOMO FK (SMPL-H BodyModel)
+    # Install from: src/motion_convertor/third_party/InterAct/
+    #   pip install -r src/motion_convertor/third_party/InterAct/requirements.txt
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

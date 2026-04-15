@@ -8,8 +8,6 @@ This document is a complete implementation guide for `src/motion_convertor/`. It
 
 `motion_convertor` is a **passive adapter library**. It is never run standalone — it is imported and called by `scripts/retarget.py` and `scripts/train.py`. It does not invoke retargeters or trainers.
 
-It exposes **two independent entry points**, each called by a different script:
-
 The tool exposes **3 functions with distinct responsibilities**, called at different points by different scripts:
 
 | Function | Called by | When | Reads | Writes |
@@ -23,6 +21,24 @@ The tool exposes **3 functions with distinct responsibilities**, called at diffe
 `to_unified_output` and `to_trainer_input` both read `output_raw`, independently.  
 `to_trainer_input` is never called automatically during retargeting — only when training is explicitly requested.  
 This keeps the retargeting backlog clean and complete on its own.
+
+### Execution model per bridge
+
+| Bridge | Execution | Env |
+|--------|-----------|-----|
+| `to_unified_input/lafan.py` | Python direct | `willow_wbt` |
+| `to_unified_input/sfu.py` | Python direct | `willow_wbt` |
+| `to_unified_input/omomo.py` | Python direct | `willow_wbt` |
+| `to_retargeter_input/lafan_gmr.py` | no-op | — |
+| `to_retargeter_input/sfu_gmr.py` | no-op | — |
+| `to_retargeter_input/omomo_gmr.py` | Python direct (reformat keys) | `willow_wbt` |
+| `to_retargeter_input/lafan_holosoma.py` | Python direct (bvhio) | `willow_wbt` |
+| `to_retargeter_input/sfu_holosoma.py` | reuse `to_unified_input/sfu.py` | `willow_wbt` |
+| `to_retargeter_input/omomo_holosoma.py` | **subprocess ×2** | `interact` |
+| `to_unified_output/gmr.py` | **subprocess** (gmr_fk.py) | `gmr` |
+| `to_unified_output/holosoma.py` | Python direct | `willow_wbt` |
+| `to_trainer_input/holosoma_holosoma.py` | no-op | — |
+| `to_trainer_input/gmr_holosoma.py` | **subprocess** (gmr_fk.py) | `gmr` |
 
 **Reference specs** (read these before implementing):
 - `specs/raw_datasets/LAFAN.md`, `SFU.md`, `OMOMO.md`
@@ -38,6 +54,8 @@ This keeps the retargeting backlog clean and complete on its own.
 ```
 src/motion_convertor/
 ├── __init__.py                         # public API — 4 dispatch functions
+├── _config.py                          # loads cfg/data.yaml, exposes dataset_path() / body_model_path()
+├── _subprocess.py                      # helper: conda run subprocess call, reads cfg/ yamls
 ├── unified.py                          # unified format save/load helpers
 │
 ├── to_unified_input/                   # Role 1a — raw dataset → unified npz (FK only, no retargeter logic)
@@ -178,30 +196,41 @@ joints = output.joints[:, :22, :]  # (T, 22, 3) — first 22 = body joints
 **Body model**: SMPL-H at `data/00_raw_datasets/OMOMO/smplh/`
 **Format reference**: `specs/raw_datasets/OMOMO.md`
 
-OMOMO pickle structure per sequence:
+OMOMO pickle is a dict keyed by sequence index. Each entry:
 ```python
 {
-    'motion': (T, 24, 3),       # global joint positions, SMPL-H 24 joints, Z-up, metres
-    'betas': (16,),
+    'seq_name': str,            # e.g. "sub3_largebox_003"
+    'root_orient': (T, 3),     # root axis-angle
+    'pose_body': (T, 63),      # body pose axis-angle (21 joints × 3)
+    'trans': (T, 3),           # root translation, metres
+    'betas': (1, 16),          # shape params — use betas[0] to get (16,)
     'gender': str,
-    'object_name': str,
-    'object_trans': (T, 3),
-    'object_orient': (T, 3),    # axis-angle
-    'fps': float,               # 30 Hz
-    'height': float,
+    'obj_rot': (T, 3, 3),      # object rotation matrix (NOT axis-angle)
+    'obj_trans': (T, 3, 1),    # object translation — use obj_trans[:, :, 0]
+    'obj_scale': (T, 1),
+    'obj_com_pos': (T, 3),
+    'trans2joint': (3,),
+    'rest_offsets': (J, 3),
 }
 ```
+30 Hz. No `motion` key in raw data — global joint positions require FK via `smplx`/`human_body_prior`.
 
 ### `convert(seq_data, out_path)`
-- **Output**: SMPL-X `.npz` — GMR does not accept SMPL-H pickle directly
-- ⚠️ **SPEC GAP**: The exact axis-angle mapping SMPL-H 24 joints → SMPL-X 21 `pose_body` joints is not yet fully documented. Before implementing:
-  1. Read `modules/third_party/holosoma/src/holosoma_retargeting/` for any existing SMPL-H→SMPL-X mapping code
-  2. Read `src/motion_convertor/third_party/InterAct/` for conversion utilities
-- Known steps (partial):
-  1. Drop joints 22 (`L_Hand`) and 23 (`R_Hand`) from the 24-joint SMPL-H subset
-  2. `motion (T,24,3)` contains **global positions**, not axis-angle params — GMR needs axis-angle params (`pose_body`, `root_orient`)
-  3. Must run **inverse kinematics** or source the original SMPL-H axis-angle params from the raw pickle (check if `poses` key exists in the full OMOMO data)
-  4. Reformat as npz with keys: `pose_body (T,63)`, `root_orient (T,3)`, `trans (T,3)`, `betas (16,)`, `gender`, `mocap_frame_rate=30.0`
+- **Output**: unified `.npz` with `global_joint_positions (T, 22, 3)`, `height`, `object_poses (T, 7)`
+- Steps:
+  1. Run SMPL-H FK using `human_body_prior.BodyModel` with `root_orient`, `pose_body`, `trans`, `betas[0]`
+     → `joints (T, 52, 3)` — take first 24 (SMPL-H joints24 subset)
+  2. Drop joint 22 (`L_Hand`) and joint 23 (`R_Hand`) → `(T, 22, 3)` global positions, already Z-up
+  3. Convert object rotation matrix → quaternion wxyz:
+     ```python
+     from scipy.spatial.transform import Rotation
+     quat_xyzw = Rotation.from_matrix(seq_data['obj_rot']).as_quat()  # (T,4) xyzw
+     quat_wxyz = quat_xyzw[:, [3,0,1,2]]                               # (T,4) wxyz
+     ```
+  4. Get object translation: `obj_trans = seq_data['obj_trans'][:, :, 0]`  # (T,3)
+  5. Build `object_poses (T,7)` = `np.hstack([quat_wxyz, obj_trans])`
+  6. Compute `height`: run FK on T-pose (zero pose, `betas[0]` only) → max joint z-coordinate
+- Save with `save_unified(out_path, joints_22, height, object_poses)`
 
 ---
 
@@ -339,44 +368,144 @@ Each function dispatches internally to the correct `datasets/` or `retargeters/`
 
 ---
 
-## Known spec gaps — resolve before implementing
+## Resolved spec gaps
 
-These three cases are partially documented but not fully specified. Investigate the referenced code before writing the converters.
+All 3 gaps are now resolved. Implementation details below.
 
-### Gap 1 — OMOMO → GMR (affects `datasets/omomo.py: to_retargeter_input_omomo_gmr`)
-- The OMOMO pickle's `motion (T,24,3)` contains **global positions**, not axis-angle params
-- GMR needs axis-angle SMPL-X params (`pose_body`, `root_orient`)
-- **Investigate**: does the raw OMOMO pickle contain a `poses` key with axis-angle? Check by loading a sample file with `pickle.load(open('...', 'rb'))` and printing all keys
-- If not, must derive axis-angle via SMPL-H IK — look in `src/motion_convertor/third_party/InterAct/process/smpl_conversion/` for existing utilities
-- Fallback: this conversion may not be tractable without axis-angle source data → mark OMOMO+GMR as unsupported
+### Gap 1 resolved — OMOMO → GMR ✅ simple reformat
 
-### Gap 2 — OMOMO → holosoma object_interaction (affects `datasets/omomo.py`)
-- holosoma for object_interaction may expect a `.pt` smplh format (45 joints, PyTorch dict) rather than the unified `.npz`
-- **Investigate**: read `modules/third_party/holosoma/src/holosoma_retargeting/holosoma_retargeting/` input loaders for the `smplh` format type — specifically `ADD_MOTION_FORMAT_README.md` and any loader that handles `.pt` files
-- If `.pt` is required, `to_retargeter_input_omomo_holosoma` must produce it instead of unified npz
+The OMOMO raw pickle contains axis-angle params directly:
+- `root_orient (T,3)`, `pose_body (T,63)`, `trans (T,3)`, `betas (1,16)`, `gender`
 
-### Gap 3 — GMR output → unified / trainer input (affects `retargeters/gmr.py` and `trainers/holosoma.py`)
-- GMR output has no body positions — only `root_pos + dof_pos`
-- Need robot FK to recover body positions
-- **Investigate**: check if GMR's own codebase (`modules/01_retargeting/GMR/`) has a utility to run FK on its output; also check `pinocchio` vs `mujoco` availability
-- Need to establish the mapping: which robot body links correspond to which of the 22 SMPL-X joints
+This is what GMR expects as SMPL-X `.npz` input. Implementation in `to_retargeter_input/omomo_gmr.py`:
+1. Load `.p` with `joblib.load()`
+2. Iterate over sequence index keys
+3. Extract per-sequence: `root_orient`, `pose_body`, `trans`, `betas[0]` (squeeze `(1,16)→(16,)`), `gender`
+4. Add `mocap_frame_rate=30.0`, zero-fill `pose_hand`, `pose_jaw`, `pose_eye`
+5. Save as `.npz` → `{seq}_input_raw.npz`
+
+---
+
+### Gap 2 resolved — OMOMO → holosoma object_interaction ⚠️ 2-step subprocess chain
+
+holosoma expects `.pt` PyTorch tensors of shape `(T, 331)` produced by InterAct.
+The chain is **fully implemented in InterAct** — we only need to call it via subprocess (env: `interact`).
+
+**Step 1** — `InterAct/process/process_omomo.py`
+- Input: raw OMOMO `.p` files
+- Output: `sequences_canonical/{seq}/human.npz` + `object.npz`
+- ⚠️ **HARDCODED PATHS** — `process_omomo.py` has NO CLI arguments. All paths are hardcoded relative to the script's cwd:
+  - `MOTION_PATH_RAW = './data/omomo/raw/train_diffusion_manip_seq_joints24.p'`
+  - `SMPLH_PATH = './models/smplh'`
+  - `SMPLX_PATH = './models/smplx'`
+  - `MOTION_PATH = './data/omomo/sequences'`
+  - `OBJECT_PATH = './data/omomo/objects'`
+- **Required directory structure** relative to subprocess cwd:
+  ```
+  {cwd}/
+  ├── data/omomo/raw/
+  │   ├── train_diffusion_manip_seq_joints24.p
+  │   └── test_diffusion_manip_seq_joints24.p
+  ├── data/omomo/objects/  (populated by script from raw)
+  ├── models/smplh/        (male/female/neutral model.npz)
+  └── models/smplx/        (SMPLX_MALE.npz, SMPLX_FEMALE.npz, SMPLX_NEUTRAL.npz)
+  ```
+- **Implementation strategy**: create symlinks in a temp staging dir OR run with `cwd=src/motion_convertor/third_party/InterAct` and rely on the user having set up the expected directory structure.
+  Recommended: **add a one-time setup helper** that creates the expected dir layout with symlinks pointing to the actual dataset and body model paths from `cfg/data.yaml`.
+- `human.npz` keys: `poses (T,156)`, `betas (16,)`, `trans (T,3)`, `gender`
+- `object.npz` keys: `angles (T,3)` axis-angle, `trans (T,3)` relative to pelvis, `name`
+
+**Step 2** — `InterAct/simulation/interact2mimic.py --dataset_name omomo`
+- Input: `../data/{dataset_name}/sequences_canonical` (relative to script cwd)
+- Output: `intermimic/InterAct/{dataset_name}/{seq}.pt` per sequence
+- ⚠️ **HARDCODED PATHS** — `interact2mimic.py` only accepts `--dataset_name`. Paths are:
+  - `MOTION_PATH = f"../data/{dataset_name}/sequences_canonical"` — one level up from cwd
+  - `MODEL_PATH = "../models"` — also relative
+  - Output: `intermimic/InterAct/{dataset_name_full}/{name}.pt` relative to cwd
+- **Required cwd**: `src/motion_convertor/third_party/InterAct/simulation/`
+  (so `../data/omomo/sequences_canonical` resolves to `InterAct/data/omomo/sequences_canonical`)
+- `.pt` tensor `(T, 331)` per sequence
+- Key indices used by holosoma:
+  - `[162:318]` → 52 SMPL-H joint positions `(T, 52, 3)` flattened
+  - `[318:325]` → object pose `[tx, ty, tz, qx, qy, qz, qw]`
+
+Both steps run in `env: interact` (see `cfg/processing/interact.yaml`).
+Implementation in `to_retargeter_input/omomo_holosoma.py`: orchestrate the 2 subprocess calls with correct `cwd` settings, copy output `.pt` → `{seq}_input_raw.pt`.
+
+---
+
+### Gap 3 resolved — GMR output → unified / trainer input ✅ FK available in GMR
+
+GMR has `general_motion_retargeting/kinematics_model.py` with `KinematicsModel.forward_kinematics(root_pos, root_rot, dof_pos)` → returns `body_pos (T, num_joints, 3)`.
+
+**Approach**: write a thin wrapper script in `cfg/processing/` that runs in `env: gmr`, calls `KinematicsModel.fk()`, and saves the result. `motion_convertor` calls it via subprocess.
+
+**Robot XML**: `modules/01_retargeting/GMR/assets/unitree_g1/g1_mocap_29dof.xml`
+
+**Body link → SMPL-X 22-joint mapping** (from holosoma `config_types/data_type.py`):
+```python
+{
+    "Pelvis":      "pelvis_contour_link",
+    "L_Hip":       "left_hip_pitch_link",
+    "R_Hip":       "right_hip_pitch_link",
+    "L_Knee":      "left_knee_link",
+    "R_Knee":      "right_knee_link",
+    "L_Ankle":     "left_ankle_intermediate_1_link",
+    "R_Ankle":     "right_ankle_intermediate_1_link",
+    "L_Foot":      "left_ankle_roll_sphere_5_link",
+    "R_Foot":      "right_ankle_roll_sphere_5_link",
+    "L_Shoulder":  "left_shoulder_roll_link",
+    "R_Shoulder":  "right_shoulder_roll_link",
+    "L_Elbow":     "left_elbow_link",
+    "R_Elbow":     "right_elbow_link",
+    "L_Wrist":     "left_rubber_hand_link",
+    "R_Wrist":     "right_rubber_hand_link",
+}
+```
+Note: only 15 of the 22 SMPL-X joints have a robot body counterpart. The 7 spine/neck/head joints (`Spine1`, `Spine2`, `Spine3`, `Neck`, `Head`, `L_Collar`, `R_Collar`) have no direct equivalent — set to the nearest parent link position or interpolate.
+
+Implementation: add `scripts/gmr_fk.py` (runs in `env: gmr`) called via subprocess from `to_unified_output/gmr.py` and `to_trainer_input/gmr_holosoma.py`.
 
 ---
 
 ## Dependencies
 
+Declared in `pyproject.toml` at the repo root under the `willow_wbt` package.
+
 | Package | Used for |
 |---------|---------|
 | `numpy` | All array operations |
-| `scipy` | `Rotation.from_rotvec()` for axis-angle → quaternion |
+| `scipy` | `Rotation.from_matrix()` / `from_rotvec()` for object rotation conversions |
 | `smplx` | SFU forward kinematics |
-| `mujoco` | OMOMO FK (SMPL-H), robot FK for GMR output |
-| `bvhio` or custom | BVH parsing for LAFAN |
+| `human_body_prior` | OMOMO forward kinematics (SMPL-H `BodyModel`) — install from InterAct repo |
+| `mujoco` | Robot FK for GMR output (G1 XML) |
+| `bvhio` | BVH parsing for LAFAN (covers FK + global positions) |
+| `pyyaml` | Reading `cfg/data.yaml` for dataset paths |
 | `torch` | Loading `.pt` files (InterAct/InterMimic outputs) |
+| `joblib` | Loading OMOMO `.p` pickle files |
 
-Body models must be present locally (not in the repo):
-- SMPL-X: `data/00_raw_datasets/SFU/models_smplx_v1_1/`
-- SMPL-H: `data/00_raw_datasets/OMOMO/smplh/`
+Body models must be present locally (not in the repo). Paths are resolved via `cfg/data.yaml`:
+- SMPL-X: `cfg/data.yaml` → `raw_datasets.SFU.body_model`
+- SMPL-H: `cfg/data.yaml` → `raw_datasets.OMOMO.body_model`
+
+## Config loading
+
+`motion_convertor` reads `cfg/data.yaml` to resolve all dataset and body model paths. The yaml is loaded once at import time from the repo root:
+
+```python
+# src/motion_convertor/_config.py
+import yaml
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).parents[2]
+_cfg = yaml.safe_load((_REPO_ROOT / "cfg" / "data.yaml").read_text())
+
+def dataset_path(dataset: str) -> Path:
+    return _REPO_ROOT / _cfg["raw_datasets"][dataset]["path"]
+
+def body_model_path(dataset: str) -> Path:
+    return _REPO_ROOT / _cfg["raw_datasets"][dataset]["body_model"]
+```
 
 ---
 

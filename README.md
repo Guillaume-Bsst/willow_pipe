@@ -93,10 +93,21 @@ willow_wbt/
 │   ├── 01_retargeted_motions/ → see data/01_retargeted_motions/README.md
 │   └── 02_policies/
 │
+├── cfg/                       # module configs — see cfg/README.md
+│   ├── data.yaml              # dataset paths + body model locations
+│   ├── retargeting/
+│   │   ├── gmr.yaml
+│   │   └── holosoma_retargeting.yaml
+│   ├── training/
+│   │   └── holosoma.yaml
+│   └── inference/
+│       └── holosoma_inference.yaml
+│
 ├── scripts/                   → see scripts/README.md
 │   ├── retarget.py
 │   ├── train.py
-│   └── infer.py
+│   ├── infer.py
+│   └── wrappers/              # thin scripts that run inside module envs (e.g. gmr_fk.py)
 │
 ├── src/
 │   └── motion_convertor/      → see src/motion_convertor/README.md
@@ -115,10 +126,34 @@ willow_wbt/
 
 ---
 
-## Submodules
+## Installation
 
+### 1 — Clone with submodules
 ```bash
 git clone --recurse-submodules <repo-url>
 # or after cloning:
 git submodule update --init --recursive
 ```
+
+### 2 — Willow WBT env (adapter layer + scripts)
+```bash
+conda create -n willow_wbt python=3.10
+conda activate willow_wbt
+pip install -e .
+```
+
+### 3 — External module envs (one-time, manual)
+Each module has its own conda env. Follow the install instructions linked in the corresponding `cfg/` yaml:
+
+| Module | yaml | Default env |
+|--------|------|-------------|
+| GMR | `cfg/retargeting/gmr.yaml` | `gmr` |
+| holosoma retargeting | `cfg/retargeting/holosoma_retargeting.yaml` | `hsretargeting` |
+| holosoma training (IsaacGym) | `cfg/training/holosoma.yaml` | `hsgym` |
+| holosoma training (IsaacSim) | `cfg/training/holosoma.yaml` | `hssim` |
+| holosoma training (MJWarp) | `cfg/training/holosoma.yaml` | `hsmujoco` |
+| holosoma inference | `cfg/inference/holosoma_inference.yaml` | `hsinference` |
+| InterAct (OMOMO processing) | `cfg/processing/interact.yaml` | `interact` |
+
+### 4 — Configure data paths
+Edit `cfg/data.yaml` to point to your local dataset and body model locations (defaults assume standard layout under `data/00_raw_datasets/`).
