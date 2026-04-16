@@ -135,25 +135,48 @@ git clone --recurse-submodules <repo-url>
 git submodule update --init --recursive
 ```
 
-### 2 — Willow WBT env (adapter layer + scripts)
+### 2 — Install all envs
 ```bash
-conda create -n willow_wbt python=3.10
-conda activate willow_wbt
-pip install -e .
+./install.sh
 ```
 
-### 3 — External module envs (one-time, manual)
-Each module has its own conda env. Follow the install instructions linked in the corresponding `cfg/` yaml:
+Everything goes into a **fully isolated miniconda** at `~/.willow_deps/miniconda3` — separate from your system conda and from any other holosoma installation.
 
-| Module | yaml | Default env |
-|--------|------|-------------|
-| GMR | `cfg/retargeting/gmr.yaml` | `gmr` |
-| holosoma retargeting | `cfg/retargeting/holosoma_retargeting.yaml` | `hsretargeting` |
-| holosoma training (IsaacGym) | `cfg/training/holosoma.yaml` | `hsgym` |
-| holosoma training (IsaacSim) | `cfg/training/holosoma.yaml` | `hssim` |
-| holosoma training (MJWarp) | `cfg/training/holosoma.yaml` | `hsmujoco` |
-| holosoma inference | `cfg/inference/holosoma_inference.yaml` | `hsinference` |
-| InterAct (OMOMO processing) | `cfg/processing/interact.yaml` | `interact` |
+| Env | What |
+|-----|------|
+| `willow_wbt` | adapter layer + scripts |
+| `gmr` | GMR retargeter |
+| `hsretargeting` | holosoma retargeter |
+| `hsmujoco` | holosoma trainer — MJWarp |
+| `hsgym` | holosoma trainer — IsaacGym |
+| `hssim` | holosoma trainer — IsaacSim |
+| `hsinference` | holosoma inference |
+
+Re-running is safe — already-installed envs are skipped via sentinel files.
+
+**Options:**
+```bash
+./install.sh --no-warp               # skip MuJoCo Warp GPU backend (CPU-only)
+
+# install a single env
+./install.sh willow
+./install.sh gmr
+./install.sh retargeting
+./install.sh mujoco [--no-warp]
+./install.sh isaacgym
+./install.sh isaacsim
+./install.sh inference
+
+# multiple holosoma versions side by side
+./install.sh retargeting --alias v2  # installs hsretargeting_v2
+```
+
+### 3 — Activate the ecosystem
+```bash
+source scripts/activate_willow.sh
+```
+
+This points your shell to `~/.willow_deps/miniconda3` and activates `willow_wbt`. From there use `conda activate <env>` as usual.
 
 ### 4 — Configure data paths
 Edit `cfg/data.yaml` to point to your local dataset and body model locations (defaults assume standard layout under `data/00_raw_datasets/`).

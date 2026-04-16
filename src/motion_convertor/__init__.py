@@ -204,7 +204,10 @@ def to_trainer_input(
 
     if retargeter == "holosoma" and trainer == "holosoma":
         from .to_trainer_input.holosoma_holosoma import convert
-        convert(output_raw_path, out_path)
+        convert(output_raw_path, out_path,
+                robot=kwargs.get("robot", "g1"),
+                input_fps=kwargs.get("input_fps", 30),
+                output_fps=kwargs.get("output_fps", 50))
 
     elif retargeter == "gmr" and trainer == "holosoma":
         from .to_trainer_input.gmr_holosoma import convert

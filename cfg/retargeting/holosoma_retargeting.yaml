@@ -4,6 +4,11 @@
 
 env: hsretargeting
 
+# Wrapper scripts (willow code, runs in hsretargeting env)
+wrappers:
+  convert: scripts/wrappers/holosoma_convert.py   # qpos .npz → form B .npz via MuJoCo bridge
+
+
 # Entry points (run from repo root)
 entry_points:
   single:

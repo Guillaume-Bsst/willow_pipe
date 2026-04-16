@@ -308,11 +308,13 @@ OMOMO pickle is a dict keyed by sequence index. Each entry:
 
 **Format reference**: `specs/training/holosoma.md`
 
-### `convert(output_raw_path, out_path)`
-- **Input**: holosoma raw retargeter output `.npz` (form B already)
-- **Output**: same file, trainer-ready
-- holosoma raw output **is** already form B (`body_pos_w`, `joint_pos`, etc. at the retargeter's output FPS)
-- Action: copy / symlink `output_raw.npz` → `trainer_input.npz` (no conversion needed)
+### `convert(output_raw_path, out_path, robot, input_fps, output_fps)`
+- **Input**: holosoma retargeter output `.npz` containing `qpos (T, 36)` at 30 Hz (form A)
+- **Output**: form B `.npz` at 50 Hz via holosoma native MuJoCo bridge
+- Delegates to `scripts/wrappers/holosoma_convert.py` running in `hsretargeting` env
+- The wrapper calls `convert_data_format_mj.py --once` which runs a headless MuJoCo
+  simulation to extract `body_pos_w`, `body_quat_w`, velocities, etc.
+- Pattern is identical to `gmr_holosoma.py` → `gmr_fk.py` in `gmr` env
 
 ## Module 13 — `to_trainer_input/gmr_holosoma.py`
 
