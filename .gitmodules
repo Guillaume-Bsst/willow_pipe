@@ -10,3 +10,9 @@
 [submodule "src/motion_convertor/third_party/InterMimic"]
 	path = src/motion_convertor/third_party/InterMimic
 	url = https://github.com/Sirui-Xu/InterMimic
+[submodule "modules/third_party/holosoma_custom"]
+	path = modules/third_party/holosoma_custom
+	url = git@github.com:Guillaume-Bsst/holosoma_custom.git
+[submodule "modules/04_deployment/unitree_ros2"]
+	path = modules/04_deployment/unitree_ros2
+	url = git@github.com:unitreerobotics/unitree_ros2.git
