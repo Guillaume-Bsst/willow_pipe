@@ -6,6 +6,9 @@ data/00_raw_datasets/OMOMO/*
 data/00_raw_datasets/SFU/*
 !data/00_raw_datasets/SFU/.gitkeep
 
+data/01_retargeted_motions/*
+!data/01_retargeted_motions/README.md
+
 # Python
 __pycache__/
 *.py[cod]

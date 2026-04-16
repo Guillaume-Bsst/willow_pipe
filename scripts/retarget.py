@@ -119,7 +119,15 @@ def retarget_sequence(
     input_ext = _get_file_ext(dataset_up, retargeter_lo)
     output_ext = _get_output_ext(retargeter_lo)
 
-    input_raw_path = run_dir / f"{seq_name}_input_raw{input_ext}"
+    # holosoma expects {data_path}/{task_name}.ext — use a dedicated input/ subdir
+    # so the retargeter input files don't mix with its outputs in run_dir.
+    if retargeter_lo == "holosoma":
+        input_dir = run_dir / "input"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        input_raw_path = input_dir / f"{seq_name}{input_ext}"
+    else:
+        input_raw_path = run_dir / f"{seq_name}_input_raw{input_ext}"
+
     input_unified_path = run_dir / f"{seq_name}_input_unified.npz"
     output_raw_path = run_dir / f"{seq_name}_output_raw{output_ext}"
     output_unified_path = run_dir / f"{seq_name}_output_unified.npz"
@@ -204,11 +212,12 @@ def _robot_name_gmr(robot: str) -> str:
 
 
 def _robot_urdf_holosoma(robot: str) -> str:
-    """Return default URDF path for holosoma retargeting."""
+    """Return absolute URDF path for holosoma retargeting."""
     mapping = {
-        "G1": "modules/third_party/holosoma/src/holosoma_retargeting/holosoma_retargeting/assets/robots/unitree_g1/g1_29dof_retargeting.urdf",
+        "G1": "modules/third_party/holosoma/src/holosoma_retargeting/holosoma_retargeting/models/g1/g1_29dof.urdf",
     }
-    return mapping.get(robot.upper(), "")
+    rel = mapping.get(robot.upper(), "")
+    return str(repo_root() / rel) if rel else ""
 
 
 # ---------------------------------------------------------------------------
