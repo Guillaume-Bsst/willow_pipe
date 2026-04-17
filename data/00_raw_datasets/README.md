@@ -26,19 +26,25 @@ LAFAN/
 ```
 OMOMO/
 ├── data/
-│   ├── train_diffusion_manip_window_120_cano_joints24.p
+│   ├── train_diffusion_manip_seq_joints24.p
 │   ├── test_diffusion_manip_seq_joints24.p
-│   ├── object_bps_npy_files_joints24/
 │   ├── captured_objects/
+│   │   ├── largebox_cleaned_simplified.obj
+│   │   └── ...
 │   └── ...
-└── smplh/
-    ├── male/model.npz
-    ├── female/model.npz
-    └── neutral/model.npz
+├── smplh/                         ← Extended SMPL+H (smplh.tar.xz)
+│   ├── male/model.npz
+│   ├── female/model.npz
+│   └── neutral/model.npz
+└── smplx/                         ← SMPL-X (smplx.zip) — for object_interaction
+    └── smplh/
+        ├── SMPLH_MALE.pkl
+        └── SMPLH_FEMALE.pkl
 ```
 
-1. Download the [OMOMO dataset](https://drive.google.com/file/d/1tZVqLB7II0whI-Qjz-z-AU3ponSEyAmm/view) (`data/` folder) into `OMOMO/data/`
-2. Download the [Extended SMPL+H model for AMASS](https://mano.is.tue.mpg.de/download.php) and extract `smplh.tar.xz` into `OMOMO/smplh/`
+1. Download the [OMOMO dataset](https://drive.google.com/file/d/1tZVqLB7II0whI-Qjz-z-AU3ponSEyAmm/view) and extract `data/` into `OMOMO/data/`
+2. Download **Extended SMPL+H model for AMASS** from [mano.is.tue.mpg.de](https://mano.is.tue.mpg.de/download.php) and extract `smplh.tar.xz` into `OMOMO/smplh/`
+3. Download **SMPL-X models** from [smpl-x.is.tue.mpg.de](https://smpl-x.is.tue.mpg.de/download.php) and extract `smplx.zip` into `OMOMO/smplx/` — required for `object_interaction` retargeting (InterAct/InterMimic pipeline)
 
 ---
 
