@@ -113,6 +113,7 @@ def retarget_sequence(
     cfg: dict,
     seq_data: dict | None = None,
     task_type: str = "robot_only",
+    visualize: bool = False,
 ) -> None:
     """Run full retargeting pipeline for one sequence."""
     dataset_up = dataset.upper()
@@ -156,7 +157,7 @@ def retarget_sequence(
     _run_retargeter(
         retargeter_lo, cfg, dataset_up, robot,
         input_raw_path, output_raw_path, run_dir,
-        seq_name, task_type,
+        seq_name, task_type, visualize,
     )
 
     # Step d: unified output
@@ -177,6 +178,7 @@ def _run_retargeter(
     run_dir: Path,
     seq_name: str,
     task_type: str = "robot_only",
+    visualize: bool = False,
 ) -> None:
     """Invoke the external retargeter via subprocess."""
     env = cfg["env"]
@@ -187,9 +189,11 @@ def _run_retargeter(
         arg_map = ep["args"]
         cmd += f" {arg_map['input']} {input_raw_path}"
         cmd += f" {arg_map['output']} {output_raw_path}"
-        # Robot name: GMR uses lowercase e.g. "unitree_g1"
         robot_gmr = _robot_name_gmr(robot)
         cmd += f" {arg_map['robot']} {robot_gmr}"
+        if dataset != "LAFAN" and "body_model_path" in arg_map:
+            from motion_convertor._config import body_model_path as bmp
+            cmd += f" {arg_map['body_model_path']} {bmp(dataset) / 'models'}"
         conda_run(env, cmd, cwd=repo_root())
 
     elif retargeter == "holosoma":
@@ -204,6 +208,9 @@ def _run_retargeter(
         cmd += f" {arg_map['task_name']} {seq_name}"
         cmd += f" {arg_map['data_format']} {data_format}"
         cmd += f" {arg_map['robot_urdf']} {robot_urdf}"
+        if visualize:
+            cmd += f" {arg_map['visualize']}"
+            cmd += f" {arg_map['debug']}"
         conda_run(env, cmd, cwd=repo_root())
 
 
@@ -236,12 +243,15 @@ def main():
     parser.add_argument("--task-type", default="robot_only",
                         choices=["robot_only", "object_interaction"],
                         help="OMOMO task type (default: robot_only)")
+    parser.add_argument("--visualize", action="store_true",
+                        help="Open the retargeter visualizer after retargeting")
     args = parser.parse_args()
 
     dataset = args.dataset.upper()
     robot = args.robot.upper()
     retargeter = args.retargeter.lower()
     task_type = args.task_type
+    visualize = args.visualize
 
     # Load retargeter config
     cfg = load_module_cfg("retargeting", retargeter if retargeter == "gmr" else "holosoma_retargeting")
@@ -305,6 +315,7 @@ def main():
                 dataset, robot, retargeter,
                 cfg, seq_data=seq_data,
                 task_type=task_type,
+                visualize=visualize,
             )
         except Exception as e:
             print(f"  ERROR: {e}")

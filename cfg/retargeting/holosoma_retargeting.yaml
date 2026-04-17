@@ -20,6 +20,8 @@ entry_points:
       task_name:   --task-name
       data_format: --data_format     # smplh | smplx | lafan | mocap
       robot_urdf:  --robot-config.robot-urdf-file
+      visualize:   --retargeter.visualize
+      debug:       --retargeter.debug
   batch:
     cmd: python modules/01_retargeting/holosoma_retargeting/examples/parallel_robot_retarget.py
     args:

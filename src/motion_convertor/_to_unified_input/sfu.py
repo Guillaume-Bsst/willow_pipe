@@ -1,7 +1,7 @@
 """
 SFU (AMASS SMPL-X) → unified format.
 
-Delegates to scripts/wrappers/sfu_prep.py running in the hsretargeting conda env,
+Delegates to scripts/wrappers/sfu_to_joints.py running in the hsretargeting conda env,
 which uses holosoma's prep_amass_smplx_for_rt.py logic (human_body_prior.BodyModel).
 
 Output: unified .npz at 30 Hz, global_joint_positions (T,22,3) + height (metres).
@@ -30,7 +30,7 @@ def convert(npz_path: Path | str, out_path: Path | str) -> None:
     model_root = body_model_path("SFU") / "models"   # .../models_smplx_v1_1/models/smplx/
 
     run_entry_point(
-        "processing", "holosoma_prep", "sfu_prep",
+        "processing", "holosoma_prep", "sfu_to_joints",
         args={
             "input":      str(npz_path),
             "output":     str(out_path),

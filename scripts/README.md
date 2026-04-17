@@ -58,6 +58,14 @@ python scripts/retarget.py \
 config.yaml
 ```
 
+**Options:**
+```
+--sequences seq1 seq2 ...   subset of sequences (default: all)
+--run-id run_20240301_...   resume an existing run
+--task-type robot_only|object_interaction   OMOMO only (default: robot_only)
+--visualize                 open the retargeter visualizer after retargeting
+```
+
 **Supported combinations:**
 
 | Dataset | GMR | holosoma_retargeting |
@@ -66,6 +74,41 @@ config.yaml
 | SFU | ✅ | ✅ |
 | OMOMO robot_only | ✅ | ✅ |
 | OMOMO object_interaction | ❌ | ✅ |
+
+**Examples:**
+```bash
+# SFU — holosoma, single sequence, with visualizer
+python scripts/retarget.py \
+    --dataset SFU \
+    --robot G1 \
+    --retargeter HOLOSOMA \
+    --sequences 0005_2FeetJump001_stageii \
+    --visualize
+
+# LAFAN — GMR, single sequence
+python scripts/retarget.py \
+    --dataset LAFAN \
+    --robot G1 \
+    --retargeter GMR \
+    --sequences walk2_subject1 \
+    --visualize
+
+# OMOMO — holosoma, robot_only, single sequence
+python scripts/retarget.py \
+    --dataset OMOMO \
+    --robot G1 \
+    --retargeter HOLOSOMA \
+    --task-type robot_only \
+    --sequences sub3_largebox_003 \
+    --visualize
+
+# OMOMO — holosoma, object_interaction (full dataset)
+python scripts/retarget.py \
+    --dataset OMOMO \
+    --robot G1 \
+    --retargeter HOLOSOMA \
+    --task-type object_interaction
+```
 
 ---
 

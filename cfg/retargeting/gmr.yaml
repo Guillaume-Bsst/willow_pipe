@@ -11,11 +11,12 @@ wrappers:
 # Entry points (run from repo root)
 entry_points:
   smplx:
-    cmd: python modules/01_retargeting/GMR/scripts/smplx_to_robot.py
+    cmd: python scripts/wrappers/gmr_smplx.py
     args:
-      input:  --smplx_file
-      output: --save_path
-      robot:  --robot
+      input:            --smplx_file
+      output:           --save_path
+      robot:            --robot
+      body_model_path:  --body_model_path
   smplx_batch:
     cmd: python modules/01_retargeting/GMR/scripts/smplx_to_robot_dataset.py
     args:

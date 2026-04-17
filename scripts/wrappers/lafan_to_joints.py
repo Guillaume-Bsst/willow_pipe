@@ -43,15 +43,20 @@ def main():
     positions = bvh_to_positions(args.input)  # (T, J, 3) Y-up, BVH order
 
     if args.format == "yup":
-        # Reorder to LAFAN_DEMO_JOINTS — holosoma applies Y→Z-up internally
+        # Reorder to LAFAN_DEMO_JOINTS.
+        # Negate Z axis: BVH convention is forward=-Z, holosoma expects forward=+Z
+        # (after its internal Y→Z-up swap, +Z becomes +Y forward in holosoma's world).
         out = positions[:, _BVH_TO_DEMO, :].astype(np.float32)
+        out[:, :, 2] *= -1
         np.save(args.output, out)
         print(f"Saved: {args.output}  shape={out.shape}")
 
     elif args.format == "unified":
-        # Reorder + Y→Z-up (swap Y and Z, negate new Y)
+        # Reorder + Y→Z-up: holosoma uses [x,z,y] swap (no negation).
+        # Apply same Z-negation so unified format is consistent.
         pos = positions[:, _BVH_TO_DEMO, :].astype(np.float32)  # (T, 22, 3) Y-up
-        joints_zup = np.stack([pos[:, :, 0], -pos[:, :, 2], pos[:, :, 1]], axis=-1)  # Z-up
+        pos[:, :, 2] *= -1
+        joints_zup = np.stack([pos[:, :, 0], pos[:, :, 2], pos[:, :, 1]], axis=-1)  # Z-up
 
         # Height from head (joint 13) and feet (joints 7, 3)
         head_z  = joints_zup[:, 13, 2].max()

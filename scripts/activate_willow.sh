@@ -30,19 +30,28 @@ fi
 export WORKSPACE_DIR="$HOME/.willow_deps"
 export CONDA_ROOT="$WORKSPACE_DIR/miniconda3"
 
-# Add willow miniconda to PATH (prepend so it takes priority)
-if [[ -d "$CONDA_ROOT/bin" ]]; then
-  export PATH="$CONDA_ROOT/bin:$PATH"
-fi
-
-# Initialize conda for this shell session
-if [[ -f "$CONDA_ROOT/etc/profile.d/conda.sh" ]]; then
-  source "$CONDA_ROOT/etc/profile.d/conda.sh"
-else
+# Initialize willow conda for this shell session
+if [[ ! -f "$CONDA_ROOT/etc/profile.d/conda.sh" ]]; then
   echo "WARNING: willow miniconda not found at $CONDA_ROOT"
   echo "  Run ./install.sh first."
   return 1
 fi
+
+WILLOW_ENV="$CONDA_ROOT/envs/willow_wbt"
+
+if [[ ! -d "$WILLOW_ENV" ]]; then
+  echo "WARNING: willow_wbt env not found at $WILLOW_ENV"
+  echo "  Run ./install.sh first."
+  return 1
+fi
+
+# Source willow miniconda so the conda() function is available for sub-envs
+source "$CONDA_ROOT/etc/profile.d/conda.sh"
+
+# Prepend willow_wbt env bin to PATH — takes priority over any active miniforge env
+export PATH="$WILLOW_ENV/bin:$PATH"
+export CONDA_PREFIX="$WILLOW_ENV"
+export CONDA_DEFAULT_ENV="willow_wbt"
 
 # Register all three ecosystems in ~/.condarc so `conda env list` shows everything.
 # conda config --add is idempotent (deduplicates automatically).
@@ -52,11 +61,9 @@ for envs_dir in \
     "$HOME/.holosoma_deps/miniconda3/envs" \
     "$CONDA_ROOT/envs"; do
   if [[ -d "$envs_dir" ]]; then
-    conda config --add envs_dirs "$envs_dir" 2>/dev/null || true
+    "$CONDA_ROOT/bin/conda" config --add envs_dirs "$envs_dir" 2>/dev/null || true
   fi
 done
-
-conda activate willow_wbt
 
 echo "Willow WBT ecosystem active"
 echo "  ~/.willow_deps/              willow_wbt, gmr"
