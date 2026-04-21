@@ -30,6 +30,7 @@ Runs a full retargeting job for one (dataset, robot, retargeter) combination.
 
 **CLI:**
 ```bash
+source scripts/activate_willow.sh 
 python scripts/retarget.py \
     --dataset LAFAN \
     --robot G1 \
@@ -77,6 +78,8 @@ config.yaml
 
 **Examples:**
 ```bash
+source scripts/activate_willow.sh 
+
 # SFU — holosoma, single sequence, with visualizer
 python scripts/retarget.py \
     --dataset SFU \

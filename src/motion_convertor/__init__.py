@@ -36,7 +36,6 @@ def to_retargeter_input(
     kwargs    :
         seq_data (dict) — required for OMOMO (one sequence entry from joblib.load)
         task_type (str) — "robot_only" | "object_interaction" (OMOMO→holosoma only)
-        out_dir (Path)  — output dir for object_interaction batch (OMOMO→holosoma only)
     """
     dataset = dataset.upper()
     retargeter = retargeter.lower()
@@ -77,9 +76,9 @@ def to_retargeter_input(
                 from ._to_retargeter_input.omomo_holosoma import convert_robot_only
                 convert_robot_only(seq_data, out_path)
             else:
-                out_dir = kwargs.get("out_dir", out_path.parent)
+                seq_name = seq_data.get("seq_name", "unknown")
                 from ._to_retargeter_input.omomo_holosoma import convert_object_interaction
-                convert_object_interaction(out_dir)
+                convert_object_interaction(seq_name, raw_path, out_path)
         else:
             raise ValueError(f"Unknown retargeter for OMOMO: {retargeter!r}")
 

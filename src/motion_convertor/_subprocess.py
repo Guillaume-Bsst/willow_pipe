@@ -16,22 +16,33 @@ def load_module_cfg(stage: str, module: str) -> dict:
     return yaml.safe_load(cfg_path.read_text())
 
 
-def conda_run(env: str, cmd: str, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
+def conda_run(
+    env: str,
+    cmd: str,
+    cwd: Path | None = None,
+    check: bool = True,
+    interactive: bool = False,
+) -> subprocess.CompletedProcess:
     """
     Run a shell command inside a conda environment.
 
     Uses `conda run -n {env} --no-capture-output {cmd}` so that the
     subprocess inherits stdout/stderr (visible to the caller).
+
+    When interactive=True, stdin is inherited from the calling terminal so
+    that blocking prompts (e.g. input()) work correctly.
     """
     if cwd is None:
         cwd = repo_root()
 
-    full_cmd = f"conda run -n {env} --no-capture-output {cmd}"
+    # `conda run` does not respect the calling shell's cwd — prepend an explicit cd.
+    full_cmd = f"conda run -n {env} --no-capture-output bash -c 'cd {cwd} && {cmd}'"
+    stdin = None if interactive else subprocess.DEVNULL
     return subprocess.run(
         full_cmd,
         shell=True,
-        cwd=str(cwd),
         check=check,
+        stdin=stdin,
     )
 
 

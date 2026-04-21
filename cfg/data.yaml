@@ -13,6 +13,7 @@ raw_datasets:
   OMOMO:
     path: data/00_raw_datasets/OMOMO/data
     body_model: data/00_raw_datasets/OMOMO/smplh
+    body_model_smplx: data/00_raw_datasets/SFU/models_smplx_v1_1/models/smplx
 
 output:
   retargeted_motions: data/01_retargeted_motions

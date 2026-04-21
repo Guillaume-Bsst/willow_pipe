@@ -80,7 +80,7 @@ def _get_retargeter_format(dataset: str, retargeter: str, task_type: str = "robo
     return ""
 
 
-def _get_file_ext(dataset: str, retargeter: str) -> str:
+def _get_file_ext(dataset: str, retargeter: str, task_type: str = "robot_only") -> str:
     """Return expected file extension for retargeter native input."""
     if retargeter.lower() == "gmr":
         if dataset.upper() == "LAFAN":
@@ -89,6 +89,8 @@ def _get_file_ext(dataset: str, retargeter: str) -> str:
     elif retargeter.lower() == "holosoma":
         if dataset.upper() == "LAFAN":
             return ".npy"
+        if dataset.upper() == "OMOMO" and task_type == "object_interaction":
+            return ".pt"
         return ".npz"
     return ".bin"
 
@@ -119,7 +121,7 @@ def retarget_sequence(
     dataset_up = dataset.upper()
     retargeter_lo = retargeter.lower()
 
-    input_ext = _get_file_ext(dataset_up, retargeter_lo)
+    input_ext = _get_file_ext(dataset_up, retargeter_lo, task_type)
     output_ext = _get_output_ext(retargeter_lo)
 
     # holosoma expects {data_path}/{task_name}.ext — use a dedicated input/ subdir
@@ -141,8 +143,6 @@ def retarget_sequence(
     if dataset_up == "OMOMO":
         kw["seq_data"] = seq_data
         kw["task_type"] = task_type
-        if task_type == "object_interaction":
-            kw["out_dir"] = run_dir
     motion_convertor.to_retargeter_input(dataset_up, retargeter_lo, raw_path, input_raw_path, **kw)
 
     # Step b: unified input
@@ -200,6 +200,8 @@ def _run_retargeter(
         ep = cfg["entry_points"]["single"]
         cmd = ep["cmd"]
         arg_map = ep["args"]
+        ep_cwd_rel = ep.get("cwd")
+        ep_cwd = repo_root() / ep_cwd_rel if ep_cwd_rel else repo_root()
         data_format = _get_retargeter_format(dataset, "holosoma", task_type)
         robot_urdf = _robot_urdf_holosoma(robot)
         cmd += f" {arg_map['input_dir']} {input_raw_path.parent}"
@@ -211,7 +213,7 @@ def _run_retargeter(
         if visualize:
             cmd += f" {arg_map['visualize']}"
             cmd += f" {arg_map['debug']}"
-        conda_run(env, cmd, cwd=repo_root())
+        conda_run(env, cmd, cwd=ep_cwd, interactive=visualize)
 
 
 def _robot_name_gmr(robot: str) -> str:

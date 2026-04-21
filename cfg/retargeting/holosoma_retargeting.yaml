@@ -12,7 +12,8 @@ wrappers:
 # Entry points (run from repo root)
 entry_points:
   single:
-    cmd: python modules/01_retargeting/holosoma_retargeting/examples/robot_retarget.py
+    cmd: python examples/robot_retarget.py
+    cwd: modules/01_retargeting/holosoma_retargeting
     args:
       input_dir:   --data_path
       output_dir:  --save_dir
@@ -23,7 +24,8 @@ entry_points:
       visualize:   --retargeter.visualize
       debug:       --retargeter.debug
   batch:
-    cmd: python modules/01_retargeting/holosoma_retargeting/examples/parallel_robot_retarget.py
+    cmd: python examples/parallel_robot_retarget.py
+    cwd: modules/01_retargeting/holosoma_retargeting
     args:
       input_dir:   --data-dir
       output_dir:  --save_dir

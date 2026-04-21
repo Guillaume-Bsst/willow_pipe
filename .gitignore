@@ -3,6 +3,7 @@ data/00_raw_datasets/LAFAN/*
 !data/00_raw_datasets/LAFAN/.gitkeep
 data/00_raw_datasets/OMOMO/*
 !data/00_raw_datasets/OMOMO/.gitkeep
+data/00_raw_datasets/OMOMO_new/*
 data/00_raw_datasets/SFU/*
 !data/00_raw_datasets/SFU/.gitkeep
 

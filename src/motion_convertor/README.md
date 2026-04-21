@@ -66,23 +66,29 @@ All files land in `01_retargeted_motions/{dataset}_{robot}/{retargeter}/run_{tim
 src/motion_convertor/
 ├── __init__.py                   # 4 public dispatch functions
 ├── unified.py                    # save_unified / load_unified
-├── to_unified_input/             # dataset FK → (T,22,3) Z-up
+├── _config.py                    # loads cfg/data.yaml, exposes repo_root() etc.
+├── _subprocess.py                # conda_run(), run_entry_point()
+├── _to_unified_input/            # dataset FK → (T,22,3) Z-up
 │   ├── lafan.py
 │   ├── sfu.py
 │   └── omomo.py
-├── to_retargeter_input/          # (dataset, retargeter) native input
+├── _to_retargeter_input/         # (dataset, retargeter) native input
 │   ├── lafan_gmr.py
 │   ├── lafan_holosoma.py
 │   ├── sfu_gmr.py
 │   ├── sfu_holosoma.py
 │   ├── omomo_gmr.py
 │   └── omomo_holosoma.py
-├── to_unified_output/            # retargeter output → (T,22,3)
+├── _to_unified_output/           # retargeter output → (T,22,3)
 │   ├── gmr.py
 │   └── holosoma.py
-└── to_trainer_input/             # retargeter output → trainer native
-    ├── gmr_holosoma.py
-    └── holosoma_holosoma.py
+├── _to_trainer_input/            # retargeter output → trainer native
+│   ├── gmr_holosoma.py
+│   └── holosoma_holosoma.py
+└── third_party/                  # git submodules
+    ├── InterAct/                 # OMOMO → holosoma object_interaction preprocessing
+    ├── lafan1/                   # LAFAN BVH tools (used by hsretargeting wrappers)
+    └── human_body_prior/         # SMPL-H FK (used by hsretargeting wrappers)
 ```
 
 The folder structure **is** the documentation: one file per supported (source, target) pair.
@@ -131,21 +137,10 @@ Input is always the **raw retargeter output**, not the unified.
 
 ---
 
-## What is still missing in the specs
-
-Before implementing, three conversions need more detail:
-
-| Gap | Missing info | Affects |
-|-----|-------------|---------|
-| **OMOMO → GMR** | Exact mapping SMPL-H 24 joints → SMPL-X 21 `pose_body` joints (axis-angle), how to compute `root_orient` and `trans` from SMPL-H pickle | raw→retargeter input |
-| **OMOMO → holosoma (object_interaction)** | Exact structure of the `.pt` smplh format (45 joints, PyTorch dict keys) expected by holosoma | raw→retargeter input |
-| **GMR output → unified / trainer input** | GMR only stores `root_pos + dof_pos`, no body positions — need to clarify which FK to run (robot URDF) and which joint subset maps to the 22 SMPL-X joints | output→unified, output→trainer input |
-
----
-
 ## third_party/
 
 | Submodule | Used for |
 |-----------|---------|
-| **InterAct** | SMPL-H processing for OMOMO object_interaction → holosoma |
-| **InterMimic** | OMOMO sequence preprocessing for physics simulation |
+| **InterAct** | SMPL-H processing for OMOMO object_interaction → holosoma (via `scripts/wrappers/omomo_to_intermimic.py`, `interact` env) |
+| **lafan1** | LAFAN BVH parsing utilities (used by `scripts/wrappers/lafan_to_joints.py`, `hsretargeting` env) |
+| **human_body_prior** | SMPL-H forward kinematics for OMOMO (used by `scripts/wrappers/omomo_to_joints.py`, `hsretargeting` env) |

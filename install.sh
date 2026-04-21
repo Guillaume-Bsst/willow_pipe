@@ -27,6 +27,7 @@
 #   ./install.sh                        # install everything (all variants)
 #   ./install.sh willow                 # willow_wbt env only
 #   ./install.sh gmr                    # GMR env only
+#   ./install.sh interact               # InterAct env (OMOMO object_interaction)
 #   ./install.sh retargeting            # both holosoma variants
 #   ./install.sh retargeting upstream   # holosoma upstream only
 #   ./install.sh retargeting custom     # holosoma_custom only
@@ -172,6 +173,41 @@ install_gmr() {
   fi
   _uv_install "$WILLOW_CONDA_ROOT/envs/gmr" -e "$GMR_DIR"
   _ok "GMR installed (editable)"
+}
+
+# --------------------------------------------------------------------------
+# InterAct — interact env (OMOMO object_interaction preprocessing)
+# --------------------------------------------------------------------------
+install_interact() {
+  _header "interact env (InterAct + InterMimic)"
+  _bootstrap_willow_miniconda
+  _ensure_willow_env "interact" "3.10"
+
+  local ENV_ROOT="$WILLOW_CONDA_ROOT/envs/interact"
+  local INTERACT_DIR="$REPO_ROOT/src/motion_convertor/third_party/InterAct"
+  local INTERMIMIC_DIR="$INTERACT_DIR/simulation"
+
+  # pytorch3d has no official pip wheel for torch 2.0 — install from source via conda-forge
+  # or skip CUDA and use the pre-built CPU wheel (sufficient for preprocessing)
+  _uv_install "$ENV_ROOT" \
+    torch==2.0.0 --index-url https://download.pytorch.org/whl/cpu
+  _uv_install "$ENV_ROOT" \
+    scipy trimesh joblib smplx tqdm numpy==1.23.1 poselib PyYAML \
+    mujoco lxml numpy-stl opencv-python-headless "numpy==1.23.1"
+  # human-body-prior from bundled submodule (same as hsretargeting)
+  _uv_install "$ENV_ROOT" \
+    --no-deps --ignore-requires-python \
+    "$REPO_ROOT/src/motion_convertor/third_party/human_body_prior"
+  # pytorch3d — CPU-only prebuilt wheel for torch 2.0 / py3.10 / Linux
+  _uv_install "$ENV_ROOT" \
+    --find-links https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu117_pyt200/download.html \
+    pytorch3d || true
+  # poselib (bundled in InterAct/simulation/poselib)
+  if [[ -f "$INTERMIMIC_DIR/poselib/setup.py" ]]; then
+    _uv_install "$ENV_ROOT" --no-deps -e "$INTERMIMIC_DIR/poselib"
+  fi
+
+  _ok "interact env installed"
 }
 
 # --------------------------------------------------------------------------
@@ -429,6 +465,7 @@ case "$TARGET" in
   all)
     install_willow
     install_gmr
+    install_interact
     _dispatch_holosoma retargeting
     _dispatch_holosoma mujoco
     _dispatch_holosoma isaacgym
@@ -438,6 +475,7 @@ case "$TARGET" in
     ;;
   willow)      install_willow ;;
   gmr)         install_gmr ;;
+  interact)    install_interact ;;
   retargeting) _dispatch_holosoma retargeting ;;
   mujoco)      _dispatch_holosoma mujoco ;;
   isaacgym)    _dispatch_holosoma isaacgym ;;
@@ -446,7 +484,7 @@ case "$TARGET" in
   deployment)  install_deployment ;;
   *)
     echo "Unknown target: $TARGET"
-    echo "Usage: $0 [all|willow|gmr|retargeting|mujoco|isaacgym|isaacsim|inference|deployment] [upstream|custom|both] [--no-warp]"
+    echo "Usage: $0 [all|willow|gmr|interact|retargeting|mujoco|isaacgym|isaacsim|inference|deployment] [upstream|custom|both] [--no-warp]"
     exit 1
     ;;
 esac

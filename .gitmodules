@@ -7,9 +7,6 @@
 [submodule "src/motion_convertor/third_party/InterAct"]
 	path = src/motion_convertor/third_party/InterAct
 	url = https://github.com/wzyabcas/InterAct
-[submodule "src/motion_convertor/third_party/InterMimic"]
-	path = src/motion_convertor/third_party/InterMimic
-	url = https://github.com/Sirui-Xu/InterMimic
 [submodule "modules/third_party/holosoma_custom"]
 	path = modules/third_party/holosoma_custom
 	url = git@github.com:Guillaume-Bsst/holosoma_custom.git

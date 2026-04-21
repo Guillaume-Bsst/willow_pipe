@@ -1,6 +1,8 @@
-# motion_convertor — Implementation TODO
+# motion_convertor — Implementation Reference
 
-This document is a complete implementation guide for `src/motion_convertor/`. It is self-contained: an implementer should be able to build the full tool from this file alone, using the referenced specs for format details.
+This document is the complete implementation guide for `src/motion_convertor/`. All modules described here are implemented. Use it as a reference for the design decisions, format contracts, and subprocess architecture behind each converter.
+
+> The "File architecture" section below shows planned paths without underscore prefixes. **Actual directory names use underscore prefixes** (`_to_unified_input/`, `_to_retargeter_input/`, `_to_unified_output/`, `_to_trainer_input/`) to mark them as internal packages. The function names and file names within those directories are unchanged.
 
 ---
 
@@ -22,23 +24,23 @@ The tool exposes **3 functions with distinct responsibilities**, called at diffe
 `to_trainer_input` is never called automatically during retargeting — only when training is explicitly requested.  
 This keeps the retargeting backlog clean and complete on its own.
 
-### Execution model per bridge
+### Execution model per bridge (as implemented)
 
 | Bridge | Execution | Env |
 |--------|-----------|-----|
-| `to_unified_input/lafan.py` | Python direct | `willow_wbt` |
-| `to_unified_input/sfu.py` | Python direct | `willow_wbt` |
-| `to_unified_input/omomo.py` | Python direct | `willow_wbt` |
-| `to_retargeter_input/lafan_gmr.py` | no-op | — |
-| `to_retargeter_input/sfu_gmr.py` | no-op | — |
-| `to_retargeter_input/omomo_gmr.py` | Python direct (reformat keys) | `willow_wbt` |
-| `to_retargeter_input/lafan_holosoma.py` | Python direct (bvhio) | `willow_wbt` |
-| `to_retargeter_input/sfu_holosoma.py` | reuse `to_unified_input/sfu.py` | `willow_wbt` |
-| `to_retargeter_input/omomo_holosoma.py` | **subprocess ×2** | `interact` |
-| `to_unified_output/gmr.py` | **subprocess** (gmr_fk.py) | `gmr` |
-| `to_unified_output/holosoma.py` | Python direct | `willow_wbt` |
-| `to_trainer_input/holosoma_holosoma.py` | no-op | — |
-| `to_trainer_input/gmr_holosoma.py` | **subprocess** (gmr_fk.py) | `gmr` |
+| `_to_unified_input/lafan.py` | **subprocess** (lafan_to_joints.py) | `hsretargeting` |
+| `_to_unified_input/sfu.py` | **subprocess** (sfu_to_joints.py) | `hsretargeting` |
+| `_to_unified_input/omomo.py` | **subprocess** (omomo_to_joints.py) | `hsretargeting` |
+| `_to_retargeter_input/lafan_gmr.py` | no-op (symlink/copy .bvh) | — |
+| `_to_retargeter_input/sfu_gmr.py` | no-op (copy .npz) | — |
+| `_to_retargeter_input/omomo_gmr.py` | Python direct (reformat keys) | `willow_wbt` |
+| `_to_retargeter_input/lafan_holosoma.py` | **subprocess** (lafan_to_joints.py, Y-up format) | `hsretargeting` |
+| `_to_retargeter_input/sfu_holosoma.py` | **subprocess** (sfu_to_joints.py) | `hsretargeting` |
+| `_to_retargeter_input/omomo_holosoma.py` | **subprocess** (omomo_to_intermimic.py) | `interact` |
+| `_to_unified_output/gmr.py` | **subprocess** (gmr_fk.py) | `gmr` |
+| `_to_unified_output/holosoma.py` | Python direct | `willow_wbt` |
+| `_to_trainer_input/holosoma_holosoma.py` | **subprocess** (holosoma_convert.py) | `hsretargeting` |
+| `_to_trainer_input/gmr_holosoma.py` | **subprocess** (gmr_fk.py) | `gmr` |
 
 **Reference specs** (read these before implementing):
 - `specs/raw_datasets/LAFAN.md`, `SFU.md`, `OMOMO.md`
@@ -54,38 +56,39 @@ This keeps the retargeting backlog clean and complete on its own.
 ```
 src/motion_convertor/
 ├── __init__.py                         # public API — 4 dispatch functions
-├── _config.py                          # loads cfg/data.yaml, exposes dataset_path() / body_model_path()
+├── _config.py                          # loads cfg/data.yaml, exposes repo_root(), dataset_path(), body_model_path()
 ├── _subprocess.py                      # helper: conda run subprocess call, reads cfg/ yamls
 ├── unified.py                          # unified format save/load helpers
 │
-├── to_unified_input/                   # Role 1a — raw dataset → unified npz (FK only, no retargeter logic)
+├── _to_unified_input/                  # Role 1a — raw dataset → unified npz (FK via subprocess)
 │   ├── __init__.py
-│   ├── lafan.py                        # BVH FK → (T,22,3) Z-up + height=1.75
-│   ├── sfu.py                          # SMPL-X FK → (T,22,3) Z-up + height from betas, 120→30 Hz
-│   └── omomo.py                        # SMPL-H FK → (T,22,3) Z-up + height + object_poses (T,7)
+│   ├── lafan.py                        # → wrappers/lafan_to_joints.py (hsretargeting env)
+│   ├── sfu.py                          # → wrappers/sfu_to_joints.py (hsretargeting env)
+│   └── omomo.py                        # → wrappers/omomo_to_joints.py (hsretargeting env)
 │
-├── to_retargeter_input/                # Role 1b — raw dataset → retargeter native input
+├── _to_retargeter_input/               # Role 1b — raw dataset → retargeter native input
 │   ├── __init__.py
 │   ├── lafan_gmr.py                    # .bvh passthrough (no-op)
-│   ├── lafan_holosoma.py               # BVH FK → .npy (T,23,3) Y-up
+│   ├── lafan_holosoma.py               # → wrappers/lafan_to_joints.py (Y-up format, hsretargeting)
 │   ├── sfu_gmr.py                      # .npz passthrough (no-op)
-│   ├── sfu_holosoma.py                 # SMPL-X FK → unified .npz (same as to_unified_input/sfu.py)
-│   ├── omomo_gmr.py                    # SMPL-H pickle → SMPL-X .npz  ⚠️ Gap 1
-│   └── omomo_holosoma.py               # SMPL-H FK → unified .npz (same as to_unified_input/omomo.py)
+│   ├── sfu_holosoma.py                 # → wrappers/sfu_to_joints.py (hsretargeting)
+│   ├── omomo_gmr.py                    # SMPL-H pickle → SMPL-X .npz (Python direct, willow_wbt)
+│   └── omomo_holosoma.py               # → wrappers/omomo_to_intermimic.py (interact env)
 │
-├── to_unified_output/                  # Role 2 — retargeter native output → unified npz
+├── _to_unified_output/                 # Role 2 — retargeter native output → unified npz
 │   ├── __init__.py
-│   ├── gmr.py                          # .pkl xyzw → (T,22,3) via robot FK  ⚠️ Gap 3
-│   └── holosoma.py                     # .npz body_pos_w → (T,22,3) body subset mapping
+│   ├── gmr.py                          # → wrappers/gmr_fk.py (gmr env) → (T,22,3) via robot FK
+│   └── holosoma.py                     # .npz body_pos_w → (T,22,3) body subset mapping (Python direct)
 │
-├── to_trainer_input/                   # Role 3 — retargeter native output → trainer input
+├── _to_trainer_input/                  # Role 3 — retargeter native output → trainer input
 │   ├── __init__.py
-│   ├── gmr_holosoma.py                 # .pkl → form B .npz via robot FK + 30→50 Hz  ⚠️ Gap 3
-│   └── holosoma_holosoma.py            # no-op (raw output is already form B)
+│   ├── gmr_holosoma.py                 # → wrappers/gmr_fk.py (gmr env) → form B .npz at 50 Hz
+│   └── holosoma_holosoma.py            # → wrappers/holosoma_convert.py (hsretargeting env)
 │
-└── third_party/                        # git submodules (already present)
-    ├── InterAct/
-    └── InterMimic/
+└── third_party/                        # git submodules
+    ├── InterAct/                       # OMOMO object_interaction preprocessing
+    ├── lafan1/                         # LAFAN BVH tools (used by hsretargeting wrappers)
+    └── human_body_prior/               # SMPL-H FK (used by hsretargeting wrappers)
 ```
 
 ---
@@ -513,18 +516,6 @@ def body_model_path(dataset: str) -> Path:
 
 ---
 
-## Implementation order (suggested)
+## Implementation status
 
-1. `unified.py` — save/load helpers (no deps, needed by everything)
-2. `to_unified_input/sfu.py` — simplest FK case, validates the SMPL-X pipeline
-3. `to_retargeter_input/sfu_gmr.py` — trivial passthrough, validates the plumbing
-4. `to_retargeter_input/sfu_holosoma.py` — reuses sfu.py, validates the reuse pattern
-5. `to_unified_output/holosoma.py` — validates the output side
-6. `to_trainer_input/holosoma_holosoma.py` — trivial copy, completes the holosoma↔holosoma chain
-7. `to_unified_input/lafan.py` — BVH FK, no body model needed
-8. `to_retargeter_input/lafan_gmr.py` — trivial passthrough
-9. `to_retargeter_input/lafan_holosoma.py` — reuses lafan.py FK, keep Y-up
-10. `to_unified_input/omomo.py` — SMPL-H FK + object pose handling
-11. `to_retargeter_input/omomo_holosoma.py` — reuses omomo.py
-12. `__init__.py` — wire up the 4 dispatch functions
-13. Resolve Gap 1/2/3, then implement `omomo_gmr.py`, `to_unified_output/gmr.py`, `to_trainer_input/gmr_holosoma.py`
+All modules are implemented. See `scripts/wrappers/` for the subprocess entry points and `cfg/processing/` for env/arg configs.

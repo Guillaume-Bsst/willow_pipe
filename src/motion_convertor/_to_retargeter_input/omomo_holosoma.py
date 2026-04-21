@@ -1,19 +1,14 @@
 """
 OMOMO → holosoma retargeter input.
 
-For robot_only tasks: holosoma expects unified .npz — global_joint_positions (T,22,3) Z-up metres + height.
-For object_interaction tasks: holosoma expects .pt tensors from InterAct 2-step pipeline.
-
-This module handles both task types:
-  - robot_only    → omomo_to_joints wrapper directly (hsretargeting env, human_body_prior)
-  - object_interaction → InterAct subprocess chain (process_omomo + interact2mimic)
-                         via cfg/processing/interact.yaml
+  robot_only         → omomo_to_joints wrapper (hsretargeting env)
+  object_interaction → omomo_to_intermimic wrapper (interact env)
 """
 import tempfile
 from pathlib import Path
 
 from .._subprocess import run_entry_point
-from .._config import body_model_path
+from .._config import body_model_path, body_model_smplx_path, dataset_path
 
 
 def convert_robot_only(seq_data: dict, out_path: Path | str) -> None:
@@ -51,48 +46,38 @@ def convert_robot_only(seq_data: dict, out_path: Path | str) -> None:
         Path(tmp_pickle).unlink(missing_ok=True)
 
 
-def convert_object_interaction(out_dir: Path | str) -> None:
+def convert_object_interaction(
+    seq_name: str,
+    raw_path: Path | str,
+    out_path: Path | str,
+) -> None:
     """
-    Run the full InterAct 2-step pipeline to produce .pt tensors for
-    holosoma object_interaction retargeting.
+    Convert one OMOMO sequence to a holosoma object_interaction .pt tensor.
 
-    This function orchestrates two subprocess calls (both in env: interact):
-      Step 1: process_omomo.py — raw .p → sequences_canonical/
-      Step 2: interact2mimic.py — sequences_canonical/ → .pt tensors
-
-    ⚠️ HARDCODED PATHS: Both InterAct scripts use hardcoded paths relative
-    to their working directories. See cfg/processing/interact.yaml and
-    src/motion_convertor/TODO.md (Gap 2) for required directory structure.
-
-    Before calling this, ensure the InterAct working directories have the
-    expected symlink/file layout:
-      InterAct/data/omomo/raw/  → OMOMO raw .p files
-      InterAct/models/smplh/    → SMPL-H body models
-      InterAct/models/smplx/    → SMPL-X body models
+    Runs the omomo_to_intermimic wrapper (interact env) which executes
+    process_omomo + interact2mimic with patched hardcoded paths.
 
     Parameters
     ----------
-    out_dir : directory where the final .pt files should be copied from
-              InterAct/simulation/intermimic/InterAct/omomo/
+    seq_name : sequence name (e.g. "sub3_largebox_003")
+    raw_path : path to the OMOMO train pickle (.p file)
+    out_path : destination .pt file path
     """
-    from .._subprocess import run_entry_point
-    from .._config import repo_root
-    import shutil
+    omomo_data_root = dataset_path("OMOMO").parent   # data/00_raw_datasets/OMOMO/data → OMOMO/
+    smplh_pkl_dir   = omomo_data_root / "smplx" / "smplh"
+    smplh_npz_root  = body_model_path("OMOMO")       # OMOMO/smplh
+    smplx_path      = body_model_smplx_path("OMOMO") # SFU smplx models with neutral .pkl
+    object_path     = omomo_data_root / "data" / "captured_objects"
 
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Step 1 — process_omomo.py (no CLI args, hardcoded paths)
-    run_entry_point("processing", "interact", "process_omomo", args={})
-
-    # Step 2 — interact2mimic.py (--dataset_name omomo)
-    run_entry_point("processing", "interact", "interact2mimic", args={"dataset": "omomo"})
-
-    # Copy output .pt files to out_dir
-    pt_output_dir = (
-        repo_root()
-        / "src/motion_convertor/third_party/InterAct/simulation/intermimic/InterAct/omomo"
+    run_entry_point(
+        "processing", "interact", "omomo_to_pt",
+        args={
+            "seq_name":       seq_name,
+            "pickle_file":    str(raw_path),
+            "smplh_pkl_dir":  str(smplh_pkl_dir),
+            "smplh_npz_root": str(smplh_npz_root),
+            "smplx_path":     str(smplx_path),
+            "object_path":    str(object_path),
+            "output":         str(out_path),
+        },
     )
-    if pt_output_dir.exists():
-        for pt_file in pt_output_dir.glob("*.pt"):
-            shutil.copy2(pt_file, out_dir / pt_file.name)

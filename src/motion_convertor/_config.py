@@ -21,5 +21,9 @@ def body_model_path(dataset: str) -> Path:
     return _REPO_ROOT / _cfg["raw_datasets"][dataset]["body_model"]
 
 
+def body_model_smplx_path(dataset: str) -> Path:
+    return _REPO_ROOT / _cfg["raw_datasets"][dataset]["body_model_smplx"]
+
+
 def output_path(stage: str) -> Path:
     return _REPO_ROOT / _cfg["output"][stage]
