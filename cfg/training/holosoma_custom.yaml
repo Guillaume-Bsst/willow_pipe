@@ -1,9 +1,9 @@
 # holosoma_custom training — Willow WBT module config
 # Repo: Guillaume-Bsst/holosoma_custom (src/holosoma/)
-# Install: follow modules/third_party/holosoma_custom/src/holosoma/README.md
-# Ecosystem: ~/.holosoma_custom_deps/
 
-# holosoma_custom uses one conda env per simulator — select with --simulator flag in scripts/train.py
+native_input_format: holosoma_trainer_npz
+native_output_format: policy_pt
+
 simulators:
   isaacgym:
     env: hscgym
@@ -23,10 +23,9 @@ simulators:
     cmd: python modules/02_training/holosoma_custom/holosoma/train_agent.py
     extra_args: simulator:mjwarp
 
-# Common args (all simulators)
 args:
   motion_file:    --motion-data.motion-file
   robot:          --exp
   output_dir:     --logger.log-dir
   num_envs:       --training.num-envs
-  checkpoint:     --training.checkpoint   # optional, resume from checkpoint
+  checkpoint:     --training.checkpoint

@@ -1,14 +1,28 @@
-# GMR — Willow WBT module config
+# GMR retargeter — Willow WBT module config
 # Repo: https://github.com/YanjieZe/GMR
-# Install: follow modules/01_retargeting/GMR/README.md
+
+native_input_format:
+  LAFAN:     gmr_bvh
+  SFU:       gmr_smplx_npz
+  OMOMO:     gmr_smplx_npz
+
+native_output_format: gmr_pkl
+
+entry_point_by_input_format:
+  gmr_bvh:       bvh
+  gmr_smplx_npz: smplx
+
+robot_config:
+  G1:
+    name: unitree_g1
+  H1:
+    name: unitree_h1
 
 env: gmr
 
-# Wrapper scripts (willow code, runs in gmr env to access KinematicsModel)
 wrappers:
-  fk: scripts/wrappers/gmr_fk.py    # forward kinematics: pkl + xml → body_pos_w npz
+  fk: scripts/wrappers/gmr_fk.py
 
-# Entry points (run from repo root)
 entry_points:
   smplx:
     cmd: python scripts/wrappers/gmr_smplx.py

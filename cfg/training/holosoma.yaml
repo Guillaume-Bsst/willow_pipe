@@ -2,6 +2,9 @@
 # Repo: amazon-far/holosoma (src/holosoma/)
 # Install: follow modules/third_party/holosoma/src/holosoma/README.md
 
+native_input_format: holosoma_trainer_npz
+native_output_format: policy_pt
+
 # holosoma uses one conda env per simulator — select with --simulator flag in scripts/train.py
 simulators:
   isaacgym:

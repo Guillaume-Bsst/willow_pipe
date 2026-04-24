@@ -3,110 +3,63 @@
 retarget.py — run a full retargeting job for one (dataset, robot, retargeter) combination.
 
 Usage:
-    python scripts/retarget.py \\
-        --dataset LAFAN \\
-        --robot G1 \\
-        --retargeter GMR \\
-        [--sequences seq1 seq2 ...] \\
+    python scripts/retarget.py \
+        --dataset LAFAN \
+        --robot G1 \
+        --retargeter GMR \
+        [--sequences seq1 seq2 ...] \
         [--run-id run_20240301_120000]
 
 Output: data/01_retargeted_motions/{dataset}_{robot}/{retargeter}/run_{timestamp}/
 """
 import argparse
 import sys
-import shutil
-import subprocess
 import yaml
 from datetime import datetime
 from pathlib import Path
 
-# Ensure src/ is on sys.path so motion_convertor is importable
 _REPO_ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 import motion_convertor
-from motion_convertor._config import dataset_path, output_path, repo_root
+from motion_convertor._config import dataset_path, output_path, repo_root, body_model_smplx_path
 from motion_convertor._subprocess import load_module_cfg, conda_run
+from motion_convertor.formats import validate_format
 
 
 # ---------------------------------------------------------------------------
-# Dataset helpers
+# Dataset helpers — driven by cfg/datasets/<dataset>.yaml
 # ---------------------------------------------------------------------------
+
+def _load_dataset_cfg(dataset: str) -> dict:
+    cfg_path = repo_root() / "cfg" / "datasets" / f"{dataset.lower()}.yaml"
+    return yaml.safe_load(cfg_path.read_text())
+
 
 def discover_sequences(dataset: str, sequences: list[str] | None) -> list[tuple]:
-    """
-    Return list of (seq_name, raw_path) for a dataset.
-
-    For LAFAN: one .bvh per sequence.
-    For SFU: one .npz per sequence (skip neutral_stagei.npz).
-    For OMOMO: loaded once as a dict — each key is a sequence index.
-                Returns (seq_name, seq_index) tuples; raw_path is the .p file.
-    """
     ds = dataset.upper()
+    ds_cfg = _load_dataset_cfg(ds)
     raw_dir = dataset_path(ds)
+    discover = ds_cfg["discover"]
 
-    if ds == "LAFAN":
-        files = sorted(raw_dir.glob("*.bvh"))
+    if discover == "single_files":
+        pattern = ds_cfg["file_pattern"]
+        if "**" in pattern:
+            files = sorted(raw_dir.rglob(pattern))
+        else:
+            files = sorted(raw_dir.glob(pattern))
         seqs = [(f.stem, f) for f in files]
 
-    elif ds == "SFU":
-        files = sorted(raw_dir.rglob("*_stageii.npz"))
-        seqs = [(f.stem, f) for f in files]
-
-    elif ds == "OMOMO":
-        # The pickle file — sequences are keys inside it
-        p_file = raw_dir / "train_diffusion_manip_seq_joints24.p"
-        seqs = [("omomo_train", p_file)]   # will be expanded later per-sequence
-
-    elif ds == "OMOMO_NEW":
-        files = sorted(raw_dir.glob("*.pt"))
-        seqs = [(f.stem, f) for f in files]
+    elif discover == "pickle_keys":
+        p_file = next(raw_dir.glob(ds_cfg["file_pattern"]))
+        seqs = [("omomo_train", p_file)]   # expanded later per-sequence
 
     else:
-        raise ValueError(f"Unknown dataset: {dataset!r}")
+        raise ValueError(f"Unknown discover strategy {discover!r} for dataset {ds!r}")
 
     if sequences:
         seqs = [(name, path) for name, path in seqs if name in sequences]
-
     return seqs
-
-
-def _get_retargeter_format(dataset: str, retargeter: str, task_type: str = "robot_only") -> str:
-    """Return data_format string expected by holosoma retargeter."""
-    dataset = dataset.upper()
-    if retargeter.lower() in ("holosoma", "holosoma_custom"):
-        if dataset == "LAFAN":
-            return "lafan"
-        elif dataset == "SFU":
-            return "smplx"
-        elif dataset == "OMOMO":
-            return "smplh" if task_type == "object_interaction" else "smplx"
-        elif dataset == "OMOMO_NEW":
-            return "smplh"
-    return ""
-
-
-def _get_file_ext(dataset: str, retargeter: str, task_type: str = "robot_only") -> str:
-    """Return expected file extension for retargeter native input."""
-    if retargeter.lower() == "gmr":
-        if dataset.upper() == "LAFAN":
-            return ".bvh"
-        return ".npz"
-    elif retargeter.lower() in ("holosoma", "holosoma_custom"):
-        if dataset.upper() == "LAFAN":
-            return ".npy"
-        if dataset.upper() == "OMOMO_NEW":
-            return ".pt"
-        if dataset.upper() == "OMOMO" and task_type == "object_interaction":
-            return ".pt"
-        return ".npz"
-    return ".bin"
-
-
-def _get_output_ext(retargeter: str) -> str:
-    if retargeter.lower() == "gmr":
-        return ".pkl"
-    return ".npz"  # holosoma, holosoma_custom
 
 
 # ---------------------------------------------------------------------------
@@ -125,16 +78,20 @@ def retarget_sequence(
     task_type: str = "robot_only",
     visualize: bool = False,
 ) -> None:
-    """Run full retargeting pipeline for one sequence."""
     dataset_up = dataset.upper()
     retargeter_lo = retargeter.lower()
 
-    input_ext = _get_file_ext(dataset_up, retargeter_lo, task_type)
-    output_ext = _get_output_ext(retargeter_lo)
+    # Resolve formats from module YAML
+    input_format = cfg["native_input_format"][dataset_up]
+    output_format = cfg["native_output_format"]
+    validate_format(input_format)
+    validate_format(output_format)
 
-    # holosoma expects {data_path}/{task_name}.ext — use a dedicated input/ subdir
-    # so the retargeter input files don't mix with its outputs in run_dir.
-    if retargeter_lo in ("holosoma", "holosoma_custom"):
+    # Derive file extensions from format names
+    input_ext = _ext_from_format(input_format)
+    output_ext = _ext_from_format(output_format)
+
+    if cfg.get("input_path_style") == "dir":
         input_dir = run_dir / "input"
         input_dir.mkdir(parents=True, exist_ok=True)
         input_raw_path = input_dir / f"{seq_name}{input_ext}"
@@ -153,7 +110,7 @@ def retarget_sequence(
         kw["task_type"] = task_type
     motion_convertor.to_retargeter_input(dataset_up, retargeter_lo, raw_path, input_raw_path, **kw)
 
-    # Step b: unified input (skipped for OMOMO_NEW — no raw joint data available)
+    # Step b: unified input (skipped for OMOMO_NEW)
     if dataset_up != "OMOMO_NEW":
         print(f"  [2/4] to_unified_input    → {input_unified_path.name}")
         kw_uni = {}
@@ -166,9 +123,10 @@ def retarget_sequence(
     # Step c: run retargeter subprocess
     print(f"  [3/4] retargeter subprocess ({cfg['env']})")
     _run_retargeter(
-        retargeter_lo, cfg, dataset_up, robot,
+        retargeter_lo, cfg, input_format,
         input_raw_path, output_raw_path, run_dir,
-        seq_name, task_type, visualize,
+        seq_name, robot, task_type, visualize,
+        dataset=dataset_up,
     )
 
     # Step d: unified output
@@ -177,78 +135,89 @@ def retarget_sequence(
         height = 0.0
     else:
         from motion_convertor.unified import load_unified
-        unified_in = load_unified(input_unified_path)
-        height = unified_in["height"]
+        height = load_unified(input_unified_path)["height"]
     motion_convertor.to_unified_output(retargeter_lo, output_raw_path, output_unified_path, height)
+
+
+_EXT_MAP: dict[str, str] = {
+    "bvh": ".bvh", "npy": ".npy", "npz": ".npz",
+    "pkl": ".pkl", "p": ".p", "pt": ".pt",
+}
+
+
+def _ext_from_format(fmt: str) -> str:
+    """Derive file extension from format name (suffix after last underscore)."""
+    suffix = fmt.rsplit("_", 1)[-1]
+    ext = _EXT_MAP.get(suffix)
+    if ext is None:
+        raise ValueError(f"Cannot derive file extension from format {fmt!r}")
+    return ext
 
 
 def _run_retargeter(
     retargeter: str,
     cfg: dict,
-    dataset: str,
-    robot: str,
+    input_format: str,
     input_raw_path: Path,
     output_raw_path: Path,
     run_dir: Path,
     seq_name: str,
+    robot: str,
     task_type: str = "robot_only",
     visualize: bool = False,
+    dataset: str = "",
 ) -> None:
-    """Invoke the external retargeter via subprocess."""
     env = cfg["env"]
+    ep_name = cfg["entry_point_by_input_format"][input_format]
+    ep = cfg["entry_points"][ep_name]
+    arg_map = ep.get("args", {})
+    ep_cwd = repo_root() / ep["cwd"] if "cwd" in ep else repo_root()
 
-    if retargeter == "gmr":
-        ep = cfg["entry_points"]["bvh" if dataset == "LAFAN" else "smplx"]
-        cmd = ep["cmd"]
-        arg_map = ep["args"]
+    robot_cfg = cfg.get("robot_config", {}).get(robot.upper(), {})
+    format_args = cfg.get("format_args", {}).get(input_format, {})
+
+    cmd = ep["cmd"]
+
+    # Input
+    if "input" in arg_map:
         cmd += f" {arg_map['input']} {input_raw_path}"
-        cmd += f" {arg_map['output']} {output_raw_path}"
-        robot_gmr = _robot_name_gmr(robot)
-        cmd += f" {arg_map['robot']} {robot_gmr}"
-        if dataset != "LAFAN" and "body_model_path" in arg_map:
-            from motion_convertor._config import body_model_smplx_path as bmp
-            cmd += f" {arg_map['body_model_path']} {bmp(dataset).parent}"
-        conda_run(env, cmd, cwd=repo_root())
-
-    elif retargeter in ("holosoma", "holosoma_custom"):
-        ep = cfg["entry_points"]["single"]
-        cmd = ep["cmd"]
-        arg_map = ep["args"]
-        ep_cwd_rel = ep.get("cwd")
-        ep_cwd = repo_root() / ep_cwd_rel if ep_cwd_rel else repo_root()
-        data_format = _get_retargeter_format(dataset, retargeter, task_type)
-        robot_urdf = _robot_urdf_holosoma(robot, retargeter)
+    elif "input_dir" in arg_map:
         cmd += f" {arg_map['input_dir']} {input_raw_path.parent}"
+
+    # Output
+    if "output" in arg_map:
+        cmd += f" {arg_map['output']} {output_raw_path}"
+    elif "output_dir" in arg_map:
         cmd += f" {arg_map['output_dir']} {run_dir}"
+
+    # Robot (name style — GMR)
+    if "robot" in arg_map and "name" in robot_cfg:
+        cmd += f" {arg_map['robot']} {robot_cfg['name']}"
+
+    # Robot (urdf style — holosoma)
+    if "robot_urdf" in arg_map and "urdf" in robot_cfg:
+        cmd += f" {arg_map['robot_urdf']} {repo_root() / robot_cfg['urdf']}"
+
+    # Body model path (GMR SMPLX entry points only)
+    if "body_model_path" in arg_map and dataset and dataset != "LAFAN":
+        cmd += f" {arg_map['body_model_path']} {body_model_smplx_path(dataset).parent}"
+
+    # Holosoma-style args
+    if "task_type" in arg_map:
         cmd += f" {arg_map['task_type']} {task_type}"
+    if "task_name" in arg_map:
         cmd += f" {arg_map['task_name']} {seq_name}"
-        cmd += f" {arg_map['data_format']} {data_format}"
-        cmd += f" {arg_map['robot_urdf']} {robot_urdf}"
-        can_visualize = visualize and "visualize" in arg_map
-        if can_visualize:
-            cmd += f" {arg_map['visualize']}"
+    if "data_format" in arg_map and "data_format" in format_args:
+        cmd += f" {arg_map['data_format']} {format_args['data_format']}"
+
+    # Visualize
+    can_visualize = visualize and "visualize" in arg_map
+    if can_visualize:
+        cmd += f" {arg_map['visualize']}"
+        if "debug" in arg_map:
             cmd += f" {arg_map['debug']}"
-        conda_run(env, cmd, cwd=ep_cwd, interactive=can_visualize)
 
-
-def _robot_name_gmr(robot: str) -> str:
-    """Map Willow robot names to GMR robot names."""
-    mapping = {"G1": "unitree_g1", "H1": "unitree_h1"}
-    return mapping.get(robot.upper(), robot.lower())
-
-
-def _robot_urdf_holosoma(robot: str, retargeter: str = "holosoma") -> str:
-    """Return absolute URDF path for holosoma / holosoma_custom retargeting."""
-    if retargeter == "holosoma_custom":
-        mapping = {
-            "G1": "modules/01_retargeting/holosoma_retargeting_custom/models/g1/g1_29dof.urdf",
-        }
-    else:
-        mapping = {
-            "G1": "modules/third_party/holosoma/src/holosoma_retargeting/holosoma_retargeting/models/g1/g1_29dof.urdf",
-        }
-    rel = mapping.get(robot.upper(), "")
-    return str(repo_root() / rel) if rel else ""
+    conda_run(env, cmd, cwd=ep_cwd, interactive=can_visualize)
 
 
 # ---------------------------------------------------------------------------
@@ -259,30 +228,21 @@ def main():
     parser = argparse.ArgumentParser(description="Run a retargeting job.")
     parser.add_argument("--dataset", required=True, help="LAFAN | SFU | OMOMO | OMOMO_new")
     parser.add_argument("--robot", required=True, help="G1 | H1 | ...")
-    parser.add_argument("--retargeter", required=True, help="GMR | holosoma | holosoma_custom")
+    parser.add_argument("--retargeter", required=True, help="gmr | holosoma | holosoma_custom")
     parser.add_argument("--sequences", nargs="*", help="Subset of sequences (default: all)")
-    parser.add_argument("--run-id", default=None, help="Resume existing run (e.g. run_20240301_120000)")
+    parser.add_argument("--run-id", default=None)
     parser.add_argument("--task-type", default="robot_only",
-                        choices=["robot_only", "object_interaction"],
-                        help="OMOMO task type (default: robot_only)")
-    parser.add_argument("--visualize", action="store_true",
-                        help="Open the retargeter visualizer after retargeting")
+                        choices=["robot_only", "object_interaction"])
+    parser.add_argument("--visualize", action="store_true")
     args = parser.parse_args()
 
     dataset = args.dataset.upper()
     robot = args.robot.upper()
     retargeter = args.retargeter.lower()
     task_type = args.task_type
-    visualize = args.visualize
 
-    # Load retargeter config
-    _cfg_name = {"gmr": "gmr", "holosoma": "holosoma_retargeting", "holosoma_custom": "holosoma_custom_retargeting"}
-    cfg = load_module_cfg("retargeting", _cfg_name[retargeter])
+    cfg = load_module_cfg("retargeting", retargeter)
 
-    # Resolve output run directory.
-    # For OMOMO, task_type is encoded in the dataset folder name:
-    #   OMOMO_robot_G1/GMR/run_20240301_120000/
-    #   OMOMO_object_G1/HOLOSOMA/run_.../
     out_base = output_path("retargeted_motions")
     if dataset == "OMOMO":
         task_suffix = "robot" if task_type == "robot_only" else "object"
@@ -291,6 +251,7 @@ def main():
         dataset_dir = f"OMOMO_new_object_{robot}"
     else:
         dataset_dir = f"{dataset}_{robot}"
+
     run_parent = out_base / dataset_dir / retargeter.upper()
     if args.run_id:
         run_dir = run_parent / args.run_id
@@ -301,7 +262,6 @@ def main():
 
     print(f"Run directory: {run_dir}")
 
-    # OMOMO: load full pickle once
     omomo_data = None
     if dataset == "OMOMO":
         import joblib
@@ -309,10 +269,8 @@ def main():
         print(f"Loading OMOMO pickle: {p_file}")
         omomo_data = joblib.load(p_file)
 
-    # Discover sequences
     seqs = discover_sequences(dataset, args.sequences)
 
-    # For OMOMO, expand to per-sequence entries
     if dataset == "OMOMO" and omomo_data is not None:
         expanded = []
         for seq_idx in omomo_data:
@@ -326,7 +284,6 @@ def main():
 
     for i, (seq_name, seq_ref) in enumerate(seqs):
         print(f"\n[{i+1}/{len(seqs)}] {seq_name}")
-
         if dataset == "OMOMO":
             raw_path = dataset_path("OMOMO") / "train_diffusion_manip_seq_joints24.p"
             seq_data = omomo_data[seq_ref]
@@ -340,25 +297,20 @@ def main():
                 dataset, robot, retargeter,
                 cfg, seq_data=seq_data,
                 task_type=task_type,
-                visualize=visualize,
+                visualize=args.visualize,
             )
         except Exception as e:
             print(f"  ERROR: {e}")
             continue
 
-    # Write config snapshot
     config_out = run_dir / "config.yaml"
     with open(config_out, "w") as f:
         yaml.dump({
-            "dataset": dataset,
-            "robot": robot,
-            "retargeter": retargeter,
-            "task_type": task_type,
-            "run_dir": str(run_dir),
+            "dataset": dataset, "robot": robot, "retargeter": retargeter,
+            "task_type": task_type, "run_dir": str(run_dir),
             "sequences": args.sequences,
         }, f)
 
-    # Update latest symlink
     latest_link = run_parent / "latest"
     if latest_link.is_symlink():
         latest_link.unlink()

@@ -47,12 +47,16 @@ def resolve_retarget_run(dataset: str, robot: str, retargeter: str, run_id: str)
 
 
 def prepare_trainer_inputs(retarget_run: Path, retargeter: str, trainer: str) -> list[Path]:
-    """
-    For each sequence in retarget_run, call to_trainer_input() and return
-    the list of trainer_input .npz paths.
-    """
-    retargeter_lo = retargeter.lower()
-    output_ext = ".pkl" if retargeter_lo == "gmr" else ".npz"
+    from motion_convertor._subprocess import load_module_cfg
+    from motion_convertor.formats import validate_format
+
+    ret_cfg = load_module_cfg("retargeting", retargeter.lower())
+    output_format = ret_cfg["native_output_format"]
+    validate_format(output_format)
+
+    suffix = output_format.rsplit("_", 1)[-1]
+    _EXT_MAP = {"bvh": ".bvh", "npy": ".npy", "npz": ".npz", "pkl": ".pkl", "p": ".p", "pt": ".pt"}
+    output_ext = _EXT_MAP[suffix]
 
     output_raw_files = sorted(retarget_run.glob(f"*_output_raw{output_ext}"))
     trainer_input_paths = []
@@ -66,7 +70,7 @@ def prepare_trainer_inputs(retarget_run: Path, retargeter: str, trainer: str) ->
         else:
             print(f"  to_trainer_input → {trainer_input_path.name}")
             motion_convertor.to_trainer_input(
-                retargeter_lo, trainer.lower(),
+                retargeter.lower(), trainer.lower(),
                 output_raw, trainer_input_path,
             )
 
@@ -114,7 +118,7 @@ def main():
     parser.add_argument("--retargeter", required=True)
     parser.add_argument("--trainer", required=True, help="holosoma")
     parser.add_argument("--simulator", default="mjwarp",
-                        choices=["isaacgym", "isaacsim", "mjwarp"])
+                        help="Simulator backend (must match a key under 'simulators:' in the trainer YAML)")
     parser.add_argument("--retarget-run", default="latest",
                         help="Retargeting run ID or 'latest' (default: latest)")
     parser.add_argument("--num-envs", type=int, default=None)

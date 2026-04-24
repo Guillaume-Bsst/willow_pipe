@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Always respond, reason, and write in **English** — even if the user writes in French.
 
+## Git
+
+Never run `git commit`. Leave all commits to the user.
+
 ## Project Overview
 
 **Willow WBT** is a modular benchmarking framework for Whole-Body Tracking (WBT) on humanoid robots. It provides adapter infrastructure to plug in, compare, and combine research solutions at each pipeline stage: motion retargeting, RL training, and inference/deployment.

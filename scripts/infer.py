@@ -53,8 +53,8 @@ def main():
     parser.add_argument("--retargeter", required=True)
     parser.add_argument("--trainer", required=True, help="holosoma")
     parser.add_argument("--mode", required=True, choices=["sim", "real"])
-    parser.add_argument("--engine", default="holosoma_inference",
-                        help="Inference engine (default: holosoma_inference)")
+    parser.add_argument("--engine", default="holosoma",
+                        help="Inference engine — must match a filename in cfg/inference/ (default: holosoma)")
     parser.add_argument("--policy-run", default="latest",
                         help="Policy run ID or 'latest' (default: latest)")
     parser.add_argument("--config", default=None,

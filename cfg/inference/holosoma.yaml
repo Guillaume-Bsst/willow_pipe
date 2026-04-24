@@ -1,20 +1,21 @@
-# holosoma_inference — Willow WBT module config
+# holosoma inference — Willow WBT module config
 # Repo: amazon-far/holosoma (src/holosoma_inference/)
-# Install: follow modules/third_party/holosoma/scripts/source_inference_setup.sh
+
+native_input_format: policy_pt
+native_output_format: unitree_ros2_cmd
 
 env: hsinference
 
-# Entry point
 entry_points:
   sim:
     cmd: python modules/03_inference/holosoma_inference/holosoma_inference/run_policy.py
     args:
-      config:     # positional, e.g. inference:g1-29dof-wbt
-      model_path: --task.model-path
-      motion_file: --task.motion-file   # for WBT mode
+      config:      # positional
+      model_path:  --task.model-path
+      motion_file: --task.motion-file
   real:
     cmd: python modules/03_inference/holosoma_inference/holosoma_inference/run_policy.py
     args:
-      config:      # positional, e.g. inference:g1-29dof-wbt
+      config:      # positional
       model_path:  --task.model-path
       motion_file: --task.motion-file
