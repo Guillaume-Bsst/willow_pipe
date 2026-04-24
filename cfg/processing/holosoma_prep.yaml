@@ -5,21 +5,21 @@ env: hsretargeting
 
 entry_points:
   lafan_to_joints:
-    cmd: python scripts/wrappers/lafan_to_joints.py
+    cmd: python src/motion_convertor/wrappers/lafan_to_joints.py
     args:
       input:  --input
       output: --output
       format: --format     # yup | unified
 
   sfu_to_joints:
-    cmd: python scripts/wrappers/sfu_to_joints.py
+    cmd: python src/motion_convertor/wrappers/sfu_to_joints.py
     args:
       input:      --input
       output:     --output
       model_root: --model_root
 
   omomo_to_joints:
-    cmd: python scripts/wrappers/omomo_to_joints.py
+    cmd: python src/motion_convertor/wrappers/omomo_to_joints.py
     args:
       pickle:    --pickle
       index:     --index

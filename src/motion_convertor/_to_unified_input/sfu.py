@@ -1,7 +1,7 @@
 """
 SFU (AMASS SMPL-X) → unified format.
 
-Delegates to scripts/wrappers/sfu_to_joints.py running in the hsretargeting conda env,
+Delegates to src/motion_convertor/wrappers/sfu_to_joints.py running in the hsretargeting conda env,
 which uses holosoma's prep_amass_smplx_for_rt.py logic (human_body_prior.BodyModel).
 
 Output: unified .npz at 30 Hz, global_joint_positions (T,22,3) + height (metres).

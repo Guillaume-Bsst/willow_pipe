@@ -7,7 +7,7 @@ Reads a retargeter output .npz (containing qpos), runs the MuJoCo simulation
 loop via the native holosoma bridge, and writes form B output .npz.
 
 Usage (called via subprocess from motion_convertor):
-    python scripts/wrappers/holosoma_convert.py \\
+    python src/motion_convertor/wrappers/holosoma_convert.py \\
         --input_file  <path/to/output_raw.npz> \\
         --output_name <path/to/trainer_input.npz> \\
         --robot       g1 \\
@@ -24,7 +24,7 @@ from pathlib import Path
 # The actual bridge lives in hsretargeting env — invoke it directly
 # (this wrapper just forwards args and ensures --once is always set)
 _BRIDGE = (
-    Path(__file__).parents[2]
+    Path(__file__).parents[3]
     / "modules/third_party/holosoma/src/holosoma_retargeting"
     / "holosoma_retargeting/data_conversion/convert_data_format_mj.py"
 )

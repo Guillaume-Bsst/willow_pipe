@@ -6,7 +6,7 @@ Loads a GMR output .pkl (root_pos, root_rot xyzw, dof_pos) and a robot XML,
 runs KinematicsModel.forward_kinematics(), saves body_pos_w as .npz.
 
 Usage (called via subprocess from motion_convertor):
-    python scripts/wrappers/gmr_fk.py \
+    python src/motion_convertor/wrappers/gmr_fk.py \
         --pkl_path  <path/to/retargeter_output.pkl> \
         --xml_path  <path/to/robot.xml> \
         --out_path  <path/to/body_pos_w.npz>
@@ -25,7 +25,7 @@ import numpy as np
 import torch
 
 # Ensure GMR is importable (script runs from repo root)
-sys.path.insert(0, str(Path(__file__).parents[2] / "modules" / "01_retargeting" / "GMR"))
+sys.path.insert(0, str(Path(__file__).parents[3] / "modules" / "01_retargeting" / "GMR"))
 
 from general_motion_retargeting.kinematics_model import KinematicsModel
 

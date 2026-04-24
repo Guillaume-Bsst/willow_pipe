@@ -1,7 +1,7 @@
 """
 OMOMO → unified format.
 
-Delegates to scripts/wrappers/omomo_to_joints.py (hsretargeting env, human_body_prior).
+Delegates to src/motion_convertor/wrappers/omomo_to_joints.py (hsretargeting env, human_body_prior).
 Output: unified .npz — global_joint_positions (T,22,3) Z-up metres + height.
 """
 import json

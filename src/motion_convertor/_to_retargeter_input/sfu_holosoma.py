@@ -1,7 +1,7 @@
 """
 SFU → holosoma retargeter input.
 
-Delegates to scripts/wrappers/sfu_to_joints.py (hsretargeting env, human_body_prior).
+Delegates to src/motion_convertor/wrappers/sfu_to_joints.py (hsretargeting env, human_body_prior).
 Produces unified .npz — global_joint_positions (T,22,3) Z-up metres + height.
 """
 from pathlib import Path

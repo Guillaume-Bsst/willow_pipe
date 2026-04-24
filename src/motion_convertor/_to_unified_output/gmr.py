@@ -5,7 +5,7 @@ GMR output is a .pkl with:
     root_pos (T,3), root_rot (T,4) xyzw, dof_pos (T,N_dof)
 
 Since GMR doesn't store global body positions, we run FK via a subprocess
-calling scripts/wrappers/gmr_fk.py in the `gmr` conda environment.
+calling src/motion_convertor/wrappers/gmr_fk.py in the `gmr` conda environment.
 The wrapper writes body_pos_w.npz, which we then load and remap.
 
 GMR G1 body names → SMPL-X 22-joint mapping:
@@ -80,7 +80,7 @@ def convert(
     with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as tmp:
         tmp_path = Path(tmp.name)
 
-    wrapper = repo_root() / "scripts" / "wrappers" / "gmr_fk.py"
+    wrapper = repo_root() / "src" / "motion_convertor" / "wrappers" / "gmr_fk.py"
     cmd = (
         f"python {wrapper} "
         f"--pkl_path {pkl_path} "

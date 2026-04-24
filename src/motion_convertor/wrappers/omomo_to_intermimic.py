@@ -10,7 +10,7 @@ Both scripts have hardcoded relative paths. This wrapper patches them via exec()
 and arranges a temp working directory with the expected symlink layout.
 
 Usage:
-    python scripts/wrappers/omomo_to_intermimic.py \\
+    python src/motion_convertor/wrappers/omomo_to_intermimic.py \\
         --seq_name sub3_largebox_003 \\
         --pickle_file /path/to/train_diffusion_manip_seq_joints24.p \\
         --smplh_pkl_dir  /path/to/OMOMO/smplx/smplh      \\
@@ -28,7 +28,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-_INTERACT_ROOT = Path(__file__).parents[2] / "src" / "motion_convertor" / "third_party" / "InterAct"
+_INTERACT_ROOT = Path(__file__).parents[3] / "src" / "motion_convertor" / "third_party" / "InterAct"
 _SIMULATE_DIR = _INTERACT_ROOT / "simulation"
 
 sys.path.insert(0, str(_INTERACT_ROOT))

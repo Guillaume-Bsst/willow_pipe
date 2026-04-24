@@ -1,7 +1,7 @@
 """
 LAFAN → unified format.
 
-Delegates to scripts/wrappers/lafan_to_joints.py (hsretargeting env, lafan1).
+Delegates to src/motion_convertor/wrappers/lafan_to_joints.py (hsretargeting env, lafan1).
 Output: unified .npz — global_joint_positions (T,22,3) Z-up metres + height.
 """
 from pathlib import Path

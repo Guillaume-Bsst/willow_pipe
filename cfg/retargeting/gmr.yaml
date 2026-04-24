@@ -21,11 +21,11 @@ robot_config:
 env: gmr
 
 wrappers:
-  fk: scripts/wrappers/gmr_fk.py
+  fk: src/motion_convertor/wrappers/gmr_fk.py
 
 entry_points:
   smplx:
-    cmd: python scripts/wrappers/gmr_smplx.py
+    cmd: python src/motion_convertor/wrappers/gmr_smplx.py
     args:
       input:            --smplx_file
       output:           --save_path

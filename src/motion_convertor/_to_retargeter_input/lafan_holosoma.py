@@ -1,7 +1,7 @@
 """
 LAFAN → holosoma retargeter input.
 
-Delegates to scripts/wrappers/lafan_to_joints.py (hsretargeting env, lafan1).
+Delegates to src/motion_convertor/wrappers/lafan_to_joints.py (hsretargeting env, lafan1).
 Produces .npy (T, 22, 3) Y-up metres in LAFAN_DEMO_JOINTS order.
 holosoma applies Y→Z-up internally.
 """

@@ -8,7 +8,7 @@ This wrapper injects the correct path by running the script source with a patche
 Runs in gmr env.
 
 Usage:
-    python scripts/wrappers/gmr_smplx.py \
+    python src/motion_convertor/wrappers/gmr_smplx.py \
         --smplx_file <input.npz> \
         --save_path <output.pkl> \
         --robot unitree_g1 \
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 # GMR repo root
-_GMR_ROOT = Path(__file__).parents[2] / "modules" / "01_retargeting" / "GMR"
+_GMR_ROOT = Path(__file__).parents[3] / "modules" / "01_retargeting" / "GMR"
 _SMPLX_SCRIPT = _GMR_ROOT / "scripts" / "smplx_to_robot.py"
 
 sys.path.insert(0, str(_GMR_ROOT))

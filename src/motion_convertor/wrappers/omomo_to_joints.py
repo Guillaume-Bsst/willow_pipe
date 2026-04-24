@@ -6,7 +6,7 @@ Runs in hsretargeting env (human_body_prior.BodyModel available).
 Reads one sequence from the OMOMO pickle by index.
 
 Usage:
-    python scripts/wrappers/omomo_to_joints.py \
+    python src/motion_convertor/wrappers/omomo_to_joints.py \
         --pickle <train_diffusion_manip_seq_joints24.p> \
         --index <seq_index> \
         --output <out.npz> \

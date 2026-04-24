@@ -106,7 +106,7 @@ def convert(
     with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as tmp:
         tmp_path = Path(tmp.name)
 
-    wrapper = repo_root() / "scripts" / "wrappers" / "gmr_fk.py"
+    wrapper = repo_root() / "src" / "motion_convertor" / "wrappers" / "gmr_fk.py"
     cmd = (
         f"python {wrapper} "
         f"--pkl_path {pkl_path} "

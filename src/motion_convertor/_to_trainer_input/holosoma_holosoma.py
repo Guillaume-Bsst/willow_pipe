@@ -17,7 +17,7 @@ from pathlib import Path
 from .._subprocess import conda_run
 from .._config import repo_root
 
-_WRAPPER = "scripts/wrappers/holosoma_convert.py"
+_WRAPPER = "src/motion_convertor/wrappers/holosoma_convert.py"
 _ENV = "hsretargeting"
 
 

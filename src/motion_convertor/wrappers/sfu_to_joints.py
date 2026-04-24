@@ -6,7 +6,7 @@ Calls holosoma's prep_amass_smplx_for_rt.py logic on a single file.
 Runs in hsretargeting env (human_body_prior.BodyModel available).
 
 Usage:
-    python scripts/wrappers/sfu_prep.py --input <file.npz> --output <out.npz> --model_root <models_dir>
+    python src/motion_convertor/wrappers/sfu_prep.py --input <file.npz> --output <out.npz> --model_root <models_dir>
 """
 import argparse
 import sys
@@ -15,7 +15,7 @@ import torch
 from pathlib import Path
 
 # holosoma data_utils on path via hsretargeting install
-sys.path.insert(0, str(Path(__file__).parents[2] /
+sys.path.insert(0, str(Path(__file__).parents[3] /
     "modules/third_party/holosoma/src/holosoma_retargeting"))
 
 from holosoma_retargeting.data_utils.prep_amass_smplx_for_rt import (

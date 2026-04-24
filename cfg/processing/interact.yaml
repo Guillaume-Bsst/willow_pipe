@@ -9,7 +9,7 @@ env: interact
 # for one sequence, with patched hardcoded paths.
 entry_points:
   omomo_to_pt:
-    cmd: python scripts/wrappers/omomo_to_intermimic.py
+    cmd: python src/motion_convertor/wrappers/omomo_to_intermimic.py
     args:
       seq_name:       --seq_name
       pickle_file:    --pickle_file

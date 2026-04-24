@@ -9,7 +9,7 @@ Produces either:
   --format unified → .npz  global_joint_positions (T,J,3) Z-up metres + height
 
 Usage:
-    python scripts/wrappers/lafan_to_joints.py \
+    python src/motion_convertor/wrappers/lafan_to_joints.py \
         --input <file.bvh> --output <out> --format yup|unified
 """
 import argparse
@@ -18,7 +18,7 @@ import numpy as np
 from pathlib import Path
 
 # lafan1 submodule
-sys.path.insert(0, str(Path(__file__).parents[2] / "src/motion_convertor/third_party/lafan1"))
+sys.path.insert(0, str(Path(__file__).parents[3] / "src/motion_convertor/third_party/lafan1"))
 
 from lafan1 import extract, utils
 

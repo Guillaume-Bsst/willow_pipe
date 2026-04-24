@@ -29,7 +29,7 @@ robot_config:
 env: hscretargeting
 
 wrappers:
-  convert: scripts/wrappers/holosoma_convert.py
+  convert: src/motion_convertor/wrappers/holosoma_convert.py
 
 entry_points:
   single:
