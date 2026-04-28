@@ -7,24 +7,9 @@ native_output_format: unitree_ros2_cmd
 env: hscinference
 
 entry_points:
-  sim:
-    cmd: python modules/03_inference/holosoma_inference_custom/run_policy.py
-    args:
-      config:      # positional
-      model_path:  --task.model-path
-      motion_file: --task.motion-file
-      sdk_type:    --robot.sdk-type
-  real:
-    cmd: python modules/03_inference/holosoma_inference_custom/run_policy.py
-    args:
-      config:      # positional
-      model_path:  --task.model-path
-      motion_file: --task.motion-file
-      sdk_type:    --robot.sdk-type
   ros2:
     cmd: python modules/03_inference/holosoma_inference_custom/run_policy.py
+    extra_args: "--robot.sdk-type ros2"
     args:
       config:      # positional
       model_path:  --task.model-path
-      motion_file: --task.motion-file
-      sdk_type:    --robot.sdk-type
