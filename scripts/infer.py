@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """
-infer.py — run a trained policy in simulation or on a real robot.
+infer.py — run a trained policy via ROS2 (holosoma_custom only).
 
 Usage:
-    # sim
+    # local policy run
     python scripts/infer.py \\
-        --dataset LAFAN --robot G1 \\
-        --retargeter GMR --trainer holosoma \\
-        --mode sim \\
+        --dataset LAFAN --robot G1_29dof \\
+        --retargeter GMR --trainer holosoma_custom \\
+        --config inference:g1-29dof-wbt \\
         [--policy-run latest]
 
-    # real robot
+    # wandb run
     python scripts/infer.py \\
-        --dataset LAFAN --robot G1 \\
-        --retargeter GMR --trainer holosoma \\
-        --mode real \\
-        [--policy-run latest]
+        --trainer holosoma_custom \\
+        --config inference:g1-29dof-wbt \\
+        --wandb-run wandb://entity/project/run_id/model.onnx
 """
 import argparse
 import sys
@@ -36,8 +35,10 @@ def resolve_policy_run(dataset: str, robot: str, retargeter: str, trainer: str, 
 
     if run_id == "latest":
         link = run_parent / "latest"
-        if not link.exists():
+        if not link.is_symlink():
             raise FileNotFoundError(f"No 'latest' symlink in {run_parent}")
+        if not link.exists():
+            raise FileNotFoundError(f"'latest' symlink in {run_parent} points to a missing directory")
         return link.resolve()
 
     run_dir = run_parent / run_id
@@ -46,58 +47,89 @@ def resolve_policy_run(dataset: str, robot: str, retargeter: str, trainer: str, 
     return run_dir
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Run inference with a trained policy.")
-    parser.add_argument("--dataset", required=True)
-    parser.add_argument("--robot", required=True)
-    parser.add_argument("--retargeter", required=True)
-    parser.add_argument("--trainer", required=True, help="holosoma")
-    parser.add_argument("--mode", required=True, choices=["sim", "real"])
-    parser.add_argument("--engine", default="holosoma",
-                        help="Inference engine — must match a filename in cfg/inference/ (default: holosoma)")
-    parser.add_argument("--policy-run", default="latest",
-                        help="Policy run ID or 'latest' (default: latest)")
-    parser.add_argument("--config", default=None,
-                        help="Inference config name (e.g. inference:g1-29dof-wbt)")
-    parser.add_argument("--motion-file", default=None,
-                        help="Optional motion file for WBT inference mode")
-    args = parser.parse_args()
+def _build_infer_cmd(ep: dict, config: str, model_path: str) -> str:
+    """Build the subprocess command string for run_policy.py."""
+    arg_map = ep.get("args", {})
+    cmd = ep["cmd"]
+    cmd += f" {config}"
+    cmd += f" {arg_map['model_path']} {model_path}"
+    extra = ep.get("extra_args", "")
+    if extra:
+        cmd += f" {extra}"
+    return cmd
 
-    dataset = args.dataset.upper()
-    robot = args.robot.upper()
-    retargeter = args.retargeter.lower()
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run inference with a trained policy via ROS2.")
+    parser.add_argument("--trainer", default="holosoma_custom",
+                        help="Inference engine — must match cfg/inference/{trainer}.yaml (default: holosoma_custom)")
+    parser.add_argument("--config", required=True,
+                        help="Tyro inference config subcommand (e.g. inference:g1-29dof-wbt)")
+    parser.add_argument("--wandb-run", default=None,
+                        help="Wandb model URI (e.g. wandb://entity/project/run_id/model.onnx). "
+                             "Mutually exclusive with --dataset/--robot/--retargeter.")
+    parser.add_argument("--dataset", default=None)
+    parser.add_argument("--robot", default=None)
+    parser.add_argument("--retargeter", default=None)
+    parser.add_argument("--policy-run", default="latest",
+                        help="Policy run ID or 'latest' (default: latest). Local mode only.")
+    return parser
+
+
+def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Validate mutual exclusion and required-field rules. Calls parser.error() on failure."""
+    if args.trainer == "holosoma":
+        parser.error("holosoma inference is not supported, use holosoma_custom")
+
+    local_args = [args.dataset, args.robot, args.retargeter]
+    has_wandb = args.wandb_run is not None
+    has_any_local = any(a is not None for a in local_args)
+    has_all_local = all(a is not None for a in local_args)
+
+    if has_wandb and has_any_local:
+        parser.error("--wandb-run is mutually exclusive with --dataset/--robot/--retargeter")
+
+    if not has_wandb and not has_all_local:
+        parser.error(
+            "provide either --wandb-run OR all three of --dataset, --robot, --retargeter"
+        )
+
+
+def main():
+    parser = _build_parser()
+    args = parser.parse_args()
+    _validate_args(parser, args)
+
     trainer = args.trainer.lower()
 
-    # Load inference config
-    cfg_path = repo_root() / "cfg" / "inference" / f"{args.engine}.yaml"
+    cfg_path = repo_root() / "cfg" / "inference" / f"{trainer}.yaml"
     with open(cfg_path) as f:
         cfg = yaml.safe_load(f)
 
-    # Locate policy run
-    policy_run = resolve_policy_run(dataset, robot, retargeter, trainer, args.policy_run)
-    print(f"Policy run: {policy_run}")
-
-    # Find policy file
-    onnx_files = list(policy_run.glob("*.onnx"))
-    pt_files = list(policy_run.glob("*.pt"))
-    model_path = onnx_files[0] if onnx_files else (pt_files[0] if pt_files else None)
-    if model_path is None:
-        raise FileNotFoundError(f"No .onnx or .pt policy file found in {policy_run}")
-    print(f"Model: {model_path}")
-
-    # Build command
+    ep = cfg["entry_points"]["ros2"]
     env = cfg["env"]
-    ep = cfg["entry_points"][args.mode]
-    cmd = ep["cmd"]
-    arg_map = ep.get("args", {})
 
-    if args.config:
-        cmd += f" {args.config}"
-    cmd += f" {arg_map['model_path']} {model_path}"
-    if args.motion_file and arg_map.get("motion_file"):
-        cmd += f" {arg_map['motion_file']} {args.motion_file}"
+    if args.wandb_run:
+        model_path = args.wandb_run
+        print(f"Wandb model: {model_path}")
+    else:
+        dataset = args.dataset.upper()
+        robot = args.robot
+        retargeter = args.retargeter.lower()
 
-    print(f"Launching {args.engine} ({args.mode})...")
+        policy_run = resolve_policy_run(dataset, robot, retargeter, trainer, args.policy_run)
+        print(f"Policy run: {policy_run}")
+
+        onnx_files = list(policy_run.glob("*.onnx"))
+        pt_files = list(policy_run.glob("*.pt"))
+        model_file = onnx_files[0] if onnx_files else (pt_files[0] if pt_files else None)
+        if model_file is None:
+            raise FileNotFoundError(f"No .onnx or .pt policy file found in {policy_run}")
+        model_path = str(model_file)
+        print(f"Model: {model_path}")
+
+    cmd = _build_infer_cmd(ep, args.config, model_path)
+    print(f"Launching {trainer} (ros2)...")
     conda_run(env, cmd, cwd=repo_root())
 
 

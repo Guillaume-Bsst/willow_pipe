@@ -243,30 +243,40 @@ python scripts/train.py \
 
 ## infer.py
 
-Runs a trained policy in simulation or on a real robot.
+Runs a trained policy via ROS2 (holosoma_custom only).
 
 **CLI:**
 ```bash
-# sim
+# local policy run
 python scripts/infer.py \
     --dataset LAFAN \
     --robot G1_29dof \
     --retargeter GMR \
-    --trainer holosoma \
-    --mode sim \
+    --trainer holosoma_custom \
+    --config inference:g1-29dof-wbt \
     [--policy-run latest]
 
-# real robot
+# wandb run (no local policy required)
 python scripts/infer.py \
-    --dataset LAFAN \
-    --robot G1_29dof \
-    --retargeter GMR \
-    --trainer holosoma \
-    --mode real \
-    [--policy-run latest]
+    --trainer holosoma_custom \
+    --config inference:g1-29dof-wbt \
+    --wandb-run wandb://entity/project/run_id/model.onnx
 ```
+
+**Arguments:**
+
+| Argument | Required | Notes |
+|---|---|---|
+| `--config` | yes | Tyro inference config (e.g. `inference:g1-29dof-wbt`, `inference:g1-27dof-wbt`) |
+| `--trainer` | no | Default: `holosoma_custom`. Must match a file in `cfg/inference/`. `holosoma` is explicitly unsupported. |
+| `--wandb-run` | wandb mode | Wandb URI passed directly as `--task.model-path` to `run_policy.py`. Mutually exclusive with `--dataset/--robot/--retargeter`. |
+| `--dataset` | local mode | |
+| `--robot` | local mode | Must include DOF suffix (e.g. `G1_29dof`) |
+| `--retargeter` | local mode | |
+| `--policy-run` | no | Run ID or `latest` (default: `latest`). Local mode only. |
 
 **What it does:**
 1. Reads `cfg/inference/{trainer}.yaml`
-2. Locates policy: `data/02_policies/{dataset}_{robot}/{retargeter}_{trainer}/{policy-run}/`
-3. subprocess (inference env) → runs inference engine
+2. *Local mode:* locates `data/02_policies/{dataset}_{robot}/{retargeter}_{trainer}/{policy-run}/`, picks first `.onnx` or `.pt` file
+3. *Wandb mode:* uses `--wandb-run` URI directly as model path
+4. Subprocess (`hscinference` env): `python modules/03_inference/holosoma_inference_custom/run_policy.py {config} --task.model-path {model} --robot.sdk-type ros2`
