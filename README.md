@@ -142,7 +142,7 @@ willow_wbt/
 
 ### 1 — Clone with submodules
 ```bash
-git clone --recurse-submodules <repo-url>
+git clone --recurse-submodules https://github.com/Guillaume-Bsst/willow_wbt
 # or after cloning:
 git submodule update --init --recursive
 ```
