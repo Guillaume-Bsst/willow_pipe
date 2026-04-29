@@ -7,6 +7,7 @@ Usage:
     python scripts/deploy.py --mode REAL --robot g1_27dof
 """
 import argparse
+import socket
 import subprocess
 import sys
 import yaml
@@ -18,6 +19,7 @@ sys.path.insert(0, str(_REPO_ROOT / "src"))
 from motion_convertor._config import repo_root
 
 _CONDA_ROOT = Path.home() / ".willow_deps" / "miniconda3"
+_ROBOT_SUBNET = "192.168.123"
 
 _ROBOT_MAP = {
     "g1_27dof": "g1",
@@ -27,6 +29,38 @@ _DDS_MODE = {
     "SIM": "SIMULATION",
     "REAL": "REAL",
 }
+
+
+def _find_robot_interface() -> tuple[str | None, str | None]:
+    """Return (ifname, ip) of the first interface on the robot subnet, or (None, None)."""
+    import fcntl, struct
+    for _, ifname in socket.if_nameindex():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            ip = socket.inet_ntoa(fcntl.ioctl(
+                s.fileno(), 0x8915,
+                struct.pack("256s", ifname[:15].encode()),
+            )[20:24])
+            if ip.startswith(_ROBOT_SUBNET):
+                return ifname, ip
+        except OSError:
+            pass
+        finally:
+            s.close()
+    return None, None
+
+
+def _check_robot_network():
+    ifname, ip = _find_robot_interface()
+    if ifname is None:
+        print(
+            f"ERROR: No network interface found on {_ROBOT_SUBNET}.x subnet.\n"
+            "       Connect the robot via Ethernet and configure the interface IP\n"
+            f"       (e.g. 192.168.123.222) before launching in REAL mode.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    print(f"Robot interface: {ifname}  ({ip})")
 
 
 def _robot_to_ros2(robot: str) -> str:
@@ -118,7 +152,9 @@ def _launch_tmux(session_name: str, panes: list[dict]) -> None:
     # 3. Select bridge pane (bottom) by default
     subprocess.run(["tmux", "select-pane", "-t", f"{session_name}:0.2"], check=True)
 
-    subprocess.run(["tmux", "attach-session", "-t", session_name], check=True)
+    result = subprocess.run(["tmux", "attach-session", "-t", session_name])
+    if result.returncode != 0:
+        print(f"tmux session '{session_name}' created. Attach with:  tmux attach -t {session_name}")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -141,6 +177,9 @@ def main():
         )
     parser = _build_parser()
     args = parser.parse_args()
+
+    if args.mode == "REAL":
+        _check_robot_network()
 
     robot_ros2 = _robot_to_ros2(args.robot)
     cfg = _load_cfg(args.deployer)
