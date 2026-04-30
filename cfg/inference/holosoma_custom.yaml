@@ -15,7 +15,7 @@ entry_points:
       export PATH=$HOME/.holosoma_custom_deps/miniconda3/envs/hscinference/bin:$PATH &&
       source modules/04_deployment/unitree_ros2/cyclonedds_ws/install/setup.bash &&
       source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION) &&
-      export PYTHONPATH=$(echo "${PYTHONPATH:-}" | tr ':' '\n' | grep -v 'unitree_control_interface' | tr '\n' ':' | sed 's/:$//') &&
+      OLD_PP=$PYTHONPATH && export PYTHONPATH="" && for p in $(echo "$OLD_PP" | tr ":" " "); do if [[ ! "$p" == *"unitree_control_interface"* ]]; then export PYTHONPATH="$PYTHONPATH${PYTHONPATH:+:}$p"; fi; done &&
       $_PYTHON modules/03_inference/holosoma_inference_custom/run_policy.py
     extra_args: "--robot.sdk-type ros2"
     args:
