@@ -463,6 +463,7 @@ install_deployment() {
       "-DPython_EXECUTABLE=$ENV_ROOT/bin/python"
       "-DPython3_EXECUTABLE=$ENV_ROOT/bin/python"
       "-DPYTHON_EXECUTABLE=$ENV_ROOT/bin/python"
+      "-DCMAKE_CXX_FLAGS=-DTRACETOOLS_DISABLED"
     )
 
     # A. Build cyclonedds first (others depend on it)
