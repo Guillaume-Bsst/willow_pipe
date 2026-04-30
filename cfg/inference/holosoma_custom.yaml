@@ -10,14 +10,14 @@ env_prefix: $HOME/.holosoma_custom_deps/miniconda3/envs/hscinference
 entry_points:
   ros2:
     cmd: >
-      unset PYTHONPATH &&
+      unset PYTHONPATH ROS_DISTRO AMENT_PREFIX_PATH CMAKE_PREFIX_PATH &&
       source modules/third_party/holosoma_custom/scripts/source_inference_setup.sh &&
       export PATH=$HOME/.holosoma_custom_deps/miniconda3/envs/hscinference/bin:$PATH &&
       export PATH=$HOME/.willow_deps/miniconda3/envs/unitree_control_interface/bin:$PATH &&
-      export PYTHONPATH=$HOME/.willow_deps/miniconda3/envs/unitree_control_interface/lib/python3.11/site-packages${PYTHONPATH:+:$PYTHONPATH} &&
       source modules/04_deployment/unitree_ros2/cyclonedds_ws/install/setup.bash &&
       source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION) &&
-      OLD_PP=$PYTHONPATH && export PYTHONPATH="" && for p in $(echo "$OLD_PP" | tr ":" " "); do if [[ ! "$p" == *"/envs/unitree_control_interface/lib/python3.12/site-packages"* ]]; then export PYTHONPATH="$PYTHONPATH${PYTHONPATH:+:}$p"; fi; done &&
+      OLD_PP=$PYTHONPATH && export PYTHONPATH="" && for p in $(echo "$OLD_PP" | tr ":" " "); do if [[ ! "$p" == *"/opt/ros/"* ]] && [[ ! "$p" == *"/envs/unitree_control_interface/lib/python"* ]]; then export PYTHONPATH="$PYTHONPATH${PYTHONPATH:+:}$p"; fi; done &&
+      export PYTHONPATH=$HOME/.willow_deps/miniconda3/envs/unitree_control_interface/lib/python3.11/site-packages${PYTHONPATH:+:$PYTHONPATH} &&
       $_PYTHON modules/03_inference/holosoma_inference_custom/run_policy.py
     extra_args: "--robot.sdk-type ros2"
     args:
