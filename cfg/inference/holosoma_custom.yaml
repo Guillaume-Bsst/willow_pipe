@@ -13,7 +13,7 @@ entry_points:
       source modules/third_party/holosoma_custom/scripts/source_inference_setup.sh &&
       source modules/04_deployment/unitree_ros2/cyclonedds_ws/install/setup.bash &&
       source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION) &&
-      python modules/03_inference/holosoma_inference_custom/run_policy.py
+      $_PYTHON modules/03_inference/holosoma_inference_custom/run_policy.py
     extra_args: "--robot.sdk-type ros2"
     args:
       config:      # positional
