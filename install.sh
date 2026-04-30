@@ -295,19 +295,15 @@ install_isaacsim_upstream() {
 install_inference_upstream() {
   _header "holosoma upstream — hsinference"
   local UPSTREAM_CONDA="$HOME/.holosoma_deps/miniconda3"
-  local SENTINEL="$HOME/.holosoma_deps/.env_setup_finished_hsinference"
-  # Pre-install swig via conda (setup_inference.sh calls sudo apt-get install swig)
-  if [[ -d "$UPSTREAM_CONDA" ]] && [[ ! -f "$SENTINEL" ]]; then
+  if [[ -d "$UPSTREAM_CONDA" ]] && [[ ! -d "$UPSTREAM_CONDA/envs/hsinference" ]]; then
     echo "  Pre-installing swig via conda (no sudo required)..."
-    if [[ ! -d "$UPSTREAM_CONDA/envs/hsinference" ]]; then
-      "$UPSTREAM_CONDA/bin/conda" create -y \
-        --prefix "$UPSTREAM_CONDA/envs/hsinference" \
-        python=3.10 swig -c conda-forge --quiet
-    else
-      "$UPSTREAM_CONDA/bin/conda" install -y \
-        --prefix "$UPSTREAM_CONDA/envs/hsinference" \
-        swig -c conda-forge --quiet
-    fi
+    "$UPSTREAM_CONDA/bin/conda" create -y \
+      --prefix "$UPSTREAM_CONDA/envs/hsinference" \
+      python=3.10 swig pip -c conda-forge --quiet
+  elif [[ -d "$UPSTREAM_CONDA" ]]; then
+    "$UPSTREAM_CONDA/bin/conda" install -y \
+      --prefix "$UPSTREAM_CONDA/envs/hsinference" \
+      swig pip -c conda-forge --quiet
   fi
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsinference/bin/python"
@@ -324,7 +320,7 @@ install_retargeting_custom() {
   _header "holosoma_custom — hscretargeting"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscretargeting/bin/python"
-  WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_retargeting.sh"
+  _clean_bash WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_retargeting.sh"
   rm -rf "$FAKE_DIR"
 }
 
@@ -332,7 +328,7 @@ install_mujoco_custom() {
   _header "holosoma_custom — hscmujoco"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscmujoco/bin/python"
-  WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_mujoco.sh" $NO_WARP
+  _clean_bash WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_mujoco.sh" $NO_WARP
   rm -rf "$FAKE_DIR"
 }
 
@@ -340,7 +336,7 @@ install_isaacgym_custom() {
   _header "holosoma_custom — hscgym"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscgym/bin/python"
-  WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_isaacgym.sh"
+  _clean_bash WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_isaacgym.sh"
   rm -rf "$FAKE_DIR"
 }
 
@@ -349,32 +345,30 @@ install_isaacsim_custom() {
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscsim/bin/python"
   _make_fake_sudo_skip_apt "$FAKE_DIR"
-  OMNI_KIT_ACCEPT_EULA=1 WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_isaacsim.sh"
+  _clean_bash OMNI_KIT_ACCEPT_EULA=1 WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_isaacsim.sh"
   rm -rf "$FAKE_DIR"
 }
 
 install_inference_custom() {
   _header "holosoma_custom — hscinference"
   local CUSTOM_CONDA="$HOME/.holosoma_custom_deps/miniconda3"
-  local SENTINEL="$HOME/.holosoma_custom_deps/.env_setup_finished_hscinference"
-  # Pre-install swig via conda
-  if [[ -d "$CUSTOM_CONDA" ]] && [[ ! -f "$SENTINEL" ]]; then
+  if [[ -d "$CUSTOM_CONDA" ]] && [[ ! -d "$CUSTOM_CONDA/envs/hscinference" ]]; then
     echo "  Pre-installing swig via conda (no sudo required)..."
-    if [[ ! -d "$CUSTOM_CONDA/envs/hscinference" ]]; then
-      "$CUSTOM_CONDA/bin/conda" create -y \
-        --prefix "$CUSTOM_CONDA/envs/hscinference" \
-        python=3.10 swig pip -c conda-forge --quiet
-    else
-      "$CUSTOM_CONDA/bin/conda" install -y \
-        --prefix "$CUSTOM_CONDA/envs/hscinference" \
-        swig pip -c conda-forge --quiet
-    fi
+    "$CUSTOM_CONDA/bin/conda" create -y \
+      --prefix "$CUSTOM_CONDA/envs/hscinference" \
+      python=3.11 swig pip -c conda-forge --quiet
+  elif [[ -d "$CUSTOM_CONDA" ]]; then
+    "$CUSTOM_CONDA/bin/conda" install -y \
+      --prefix "$CUSTOM_CONDA/envs/hscinference" \
+      swig pip -c conda-forge --quiet
   fi
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscinference/bin/python"
   _make_fake_sudo_skip_apt "$FAKE_DIR"
-  WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_inference.sh"
+  _clean_bash WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_inference.sh"
   rm -rf "$FAKE_DIR"
+  # tyro is not a dependency of holosoma_inference — install it explicitly.
+  "$CUSTOM_CONDA/envs/hscinference/bin/pip" install tyro --quiet
 }
 
 # --------------------------------------------------------------------------
