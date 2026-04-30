@@ -441,6 +441,14 @@ install_deployment() {
   if [[ ! -f "$ENV_ROOT/bin/vcs" ]]; then
     "$ENV_PYTHON" -m pip install vcstool --quiet
   fi
+  # Remove directories that exist but are not valid git repos (broken clone from a
+  # previous failed SSH attempt) so vcs --skip-existing doesn't silently skip them.
+  for _dir in "$SRC"/*/; do
+    if [[ -d "$_dir" ]] && [[ ! -d "$_dir/.git" ]]; then
+      echo "  Removing incomplete clone: $_dir"
+      rm -rf "$_dir"
+    fi
+  done
   # Rewrite SSH URLs to HTTPS so vcs import works without a GitHub SSH key
   git config --global url."https://github.com/".insteadOf "git@github.com:"
   (cd "$SRC" && "$ENV_ROOT/bin/vcs" import --recursive --skip-existing < "$UCI_DIR/git-deps.yaml")
