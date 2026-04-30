@@ -11,7 +11,7 @@ entry_points:
   ros2:
     cmd: >
       unset PYTHONPATH ROS_DISTRO AMENT_PREFIX_PATH CMAKE_PREFIX_PATH &&
-      export PATH=$HOME/.willow_deps/miniconda3/envs/unitree_control_interface/bin:$PATH &&
+      export PATH=$PATH:$HOME/.willow_deps/miniconda3/envs/unitree_control_interface/bin &&
       source modules/04_deployment/unitree_ros2/cyclonedds_ws/install/setup.bash &&
       source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION) &&
       python modules/03_inference/holosoma_inference_custom/run_policy.py
