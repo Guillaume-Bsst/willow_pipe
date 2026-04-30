@@ -432,6 +432,11 @@ install_deployment() {
   echo "  Pinning cmake=3.28 (rosidl_generator_py compatibility)..."
   "$WILLOW_CONDA_BIN" install -y cmake=3.28 -c conda-forge --prefix "$ENV_ROOT" --quiet
 
+  # lttng-ust is the tracing backend required by rclcpp's TRACEPOINT macros.
+  # Without it, unitree_control_interface fails to compile on aarch64 with robostack.
+  echo "  Installing lttng-ust (rclcpp tracing backend)..."
+  "$WILLOW_CONDA_BIN" install -y lttng-ust -c conda-forge --prefix "$ENV_ROOT" --quiet
+
   # Clone remaining deps via vcs (skip if already imported)
   if [[ ! -f "$ENV_ROOT/bin/vcs" ]]; then
     "$ENV_PYTHON" -m pip install vcstool --quiet
