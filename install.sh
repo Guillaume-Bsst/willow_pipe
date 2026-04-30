@@ -48,6 +48,7 @@ HOLOSOMA_CUSTOM_SCRIPTS="$REPO_ROOT/modules/third_party/holosoma_custom/scripts"
 # willow's own miniconda (willow_wbt + gmr + unitree_control_interface)
 WILLOW_CONDA_ROOT="$HOME/.willow_deps/miniconda3"
 WILLOW_CONDA_BIN="$WILLOW_CONDA_ROOT/bin/conda"
+WILLOW_MAMBA_BIN="$WILLOW_CONDA_ROOT/bin/mamba"
 
 # --------------------------------------------------------------------------
 # Parse arguments
@@ -67,6 +68,16 @@ done
 _header() { echo ""; echo "══════════════════════════════════════════"; echo "  $1"; echo "══════════════════════════════════════════"; }
 _ok()     { echo "  ✓ $1"; }
 
+_ensure_mamba() {
+  local root="$1"
+  local conda="$root/bin/conda"
+  local mamba="$root/bin/mamba"
+  if [[ -d "$root" ]] && [[ ! -f "$mamba" ]]; then
+    echo "  Installing mamba in $root..."
+    "$conda" install -y mamba -c conda-forge -n base --quiet
+  fi
+}
+
 # Build a fake pip wrapper that calls python -m pip on a given env.
 # Uses a dynamic lookup so it works even before the env is created
 # (the env is created by the setup script itself before any pip call).
@@ -85,7 +96,7 @@ _make_fake_sudo_skip_apt() {
   cat > "$fake_dir/sudo" <<'FAKESUDO'
 #!/usr/bin/env bash
 if [[ "$*" == *"apt"* ]]; then
-  echo "[install.sh] skipping sudo apt (dependencies pre-installed via conda)"
+  echo "[install.sh] skipping sudo apt (dependencies pre-installed via mamba)"
   exit 0
 fi
 exec /usr/bin/sudo "$@"
@@ -94,32 +105,41 @@ FAKESUDO
 }
 
 # --------------------------------------------------------------------------
-# Bootstrap willow miniconda (for willow_wbt, gmr, unitree_control_interface)
+# Bootstrap willow miniforge (for willow_wbt, gmr, unitree_control_interface)
 # --------------------------------------------------------------------------
 _bootstrap_willow_miniconda() {
-  if [[ -d "$WILLOW_CONDA_ROOT" ]]; then return; fi
+  if [[ -d "$WILLOW_CONDA_ROOT" ]]; then 
+    _ensure_mamba "$WILLOW_CONDA_ROOT"
+    return
+  fi
 
-  _header "Bootstrapping willow miniconda → $WILLOW_CONDA_ROOT"
+  _header "Bootstrapping willow miniforge → $WILLOW_CONDA_ROOT"
   mkdir -p "$HOME/.willow_deps"
 
   OS_NAME="$(uname -s)"; ARCH_NAME="$(uname -m)"
   if [[ "$OS_NAME" == "Linux" ]]; then
-    INSTALLER="Miniconda3-latest-Linux-x86_64.sh"
+    if [[ "$ARCH_NAME" == "aarch64" ]]; then
+      INSTALLER="Miniforge3-Linux-aarch64.sh"
+    else
+      INSTALLER="Miniforge3-Linux-x86_64.sh"
+    fi
   elif [[ "$OS_NAME" == "Darwin" ]]; then
-    [[ "$ARCH_NAME" == "arm64" ]] \
-      && INSTALLER="Miniconda3-latest-MacOSX-arm64.sh" \
-      || INSTALLER="Miniconda3-latest-MacOSX-x86_64.sh"
+    if [[ "$ARCH_NAME" == "arm64" ]]; then
+      INSTALLER="Miniforge3-MacOSX-arm64.sh"
+    else
+      INSTALLER="Miniforge3-MacOSX-x86_64.sh"
+    fi
   else
     echo "ERROR: unsupported OS: $OS_NAME" >&2; exit 1
   fi
 
-  TMP="$HOME/.willow_deps/miniconda_install.sh"
-  curl -fsSL "https://repo.anaconda.com/miniconda/${INSTALLER}" -o "$TMP"
+  TMP="$HOME/.willow_deps/miniforge_install.sh"
+  curl -fsSL "https://github.com/conda-forge/miniforge/releases/latest/download/${INSTALLER}" -o "$TMP"
   bash "$TMP" -b -u -p "$WILLOW_CONDA_ROOT"
   rm "$TMP"
-  "$WILLOW_CONDA_BIN" tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true
-  "$WILLOW_CONDA_BIN" tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r    || true
-  _ok "willow miniconda installed at $WILLOW_CONDA_ROOT"
+  
+  _ensure_mamba "$WILLOW_CONDA_ROOT"
+  _ok "willow miniforge installed at $WILLOW_CONDA_ROOT"
 }
 
 _ensure_willow_env() {
@@ -127,10 +147,8 @@ _ensure_willow_env() {
   local env_root="$WILLOW_CONDA_ROOT/envs/$name"
   if [[ ! -d "$env_root" ]]; then
     echo "  Creating env '$name' (python $python)..."
-    if [[ ! -f "$WILLOW_CONDA_ROOT/bin/mamba" ]]; then
-      "$WILLOW_CONDA_BIN" install -y mamba -c conda-forge -n base --quiet
-    fi
-    MAMBA_ROOT_PREFIX="$WILLOW_CONDA_ROOT" "$WILLOW_CONDA_ROOT/bin/mamba" create -y \
+    _ensure_mamba "$WILLOW_CONDA_ROOT"
+    MAMBA_ROOT_PREFIX="$WILLOW_CONDA_ROOT" "$WILLOW_MAMBA_BIN" create -y \
       --prefix "$env_root" python="$python" -c conda-forge --override-channels
     # Bootstrap uv into the new env for fast package installs
     "$env_root/bin/python" -m pip install uv --quiet
@@ -377,7 +395,7 @@ install_deployment() {
   # Clone unitree_control_interface into workspace if missing
   if [[ ! -d "$UCI_DIR" ]]; then
     echo "  Cloning unitree_control_interface..."
-    git clone git@github.com:inria-paris-robotics-lab/unitree_control_interface.git \
+    git clone https://github.com/inria-paris-robotics-lab/unitree_control_interface.git \
       --recursive "$UCI_DIR"
   else
     _ok "unitree_control_interface already cloned"
