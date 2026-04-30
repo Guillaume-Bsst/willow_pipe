@@ -27,8 +27,8 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   exit 1
 fi
 
-export WORKSPACE_DIR="$HOME/.willow_deps"
-export CONDA_ROOT="$WORKSPACE_DIR/miniconda3"
+WORKSPACE_DIR="$HOME/.willow_deps"
+CONDA_ROOT="$WORKSPACE_DIR/miniconda3"
 
 # Initialize willow conda for this shell session
 if [[ ! -f "$CONDA_ROOT/etc/profile.d/conda.sh" ]]; then

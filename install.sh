@@ -363,11 +363,11 @@ install_inference_custom() {
     if [[ ! -d "$CUSTOM_CONDA/envs/hscinference" ]]; then
       "$CUSTOM_CONDA/bin/conda" create -y \
         --prefix "$CUSTOM_CONDA/envs/hscinference" \
-        python=3.10 swig -c conda-forge --quiet
+        python=3.10 swig pip -c conda-forge --quiet
     else
       "$CUSTOM_CONDA/bin/conda" install -y \
         --prefix "$CUSTOM_CONDA/envs/hscinference" \
-        swig -c conda-forge --quiet
+        swig pip -c conda-forge --quiet
     fi
   fi
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
