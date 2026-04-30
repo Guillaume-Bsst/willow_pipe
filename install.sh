@@ -68,6 +68,15 @@ done
 _header() { echo ""; echo "══════════════════════════════════════════"; echo "  $1"; echo "══════════════════════════════════════════"; }
 _ok()     { echo "  ✓ $1"; }
 
+# Run a script in a shell with all conda state stripped, so the active
+# willow_wbt env does not bleed into holosoma's mamba env resolution.
+_clean_bash() {
+  env -u CONDA_PREFIX -u CONDA_DEFAULT_ENV -u CONDA_SHLVL \
+      -u CONDA_EXE -u _CONDA_EXE -u CONDA_PYTHON_EXE \
+      -u CONDA_PROMPT_MODIFIER -u _CONDA_ROOT -u _CE_M -u _CE_CONDA \
+      "$@"
+}
+
 _ensure_mamba() {
   local root="$1"
   local conda="$root/bin/conda"
@@ -248,7 +257,7 @@ install_retargeting_upstream() {
   _header "holosoma upstream — hsretargeting"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsretargeting/bin/python"
-  PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_retargeting.sh"
+  _clean_bash PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_retargeting.sh"
   rm -rf "$FAKE_DIR"
 
   # Install human_body_prior from submodule (needed for AMASS/SFU preprocessing)
@@ -262,7 +271,7 @@ install_mujoco_upstream() {
   _header "holosoma upstream — hsmujoco"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsmujoco/bin/python"
-  PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_mujoco.sh" $NO_WARP
+  _clean_bash PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_mujoco.sh" $NO_WARP
   rm -rf "$FAKE_DIR"
 }
 
@@ -270,7 +279,7 @@ install_isaacgym_upstream() {
   _header "holosoma upstream — hsgym"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsgym/bin/python"
-  PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_isaacgym.sh"
+  _clean_bash PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_isaacgym.sh"
   rm -rf "$FAKE_DIR"
 }
 
@@ -279,7 +288,7 @@ install_isaacsim_upstream() {
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hssim/bin/python"
   _make_fake_sudo_skip_apt "$FAKE_DIR"
-  OMNI_KIT_ACCEPT_EULA=1 PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_isaacsim.sh"
+  _clean_bash OMNI_KIT_ACCEPT_EULA=1 PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_isaacsim.sh"
   rm -rf "$FAKE_DIR"
 }
 
@@ -303,7 +312,7 @@ install_inference_upstream() {
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsinference/bin/python"
   _make_fake_sudo_skip_apt "$FAKE_DIR"
-  PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_inference.sh"
+  _clean_bash PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_inference.sh"
   rm -rf "$FAKE_DIR"
 }
 
