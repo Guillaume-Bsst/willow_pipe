@@ -43,6 +43,22 @@ def conda_run(
         env_selector = f"--prefix {os.path.expandvars(prefix)}"
     else:
         env_selector = f"-n {env}"
+        python_exec_path = f"{os.path.expandvars(prefix)}/bin/python"
+        # Assuming python3.11 based on the error message
+        python_version_dir = "python3.11"
+        site_packages_path = f"{os.path.expandvars(prefix)}/lib/{python_version_dir}/site-packages"
+
+        # The python executable is invoked as part of the `cmd` string.
+        # We need to insert the PYTHONPATH export right before this python invocation.
+        # Find the specific python executable from the given `prefix` in the `cmd` string.
+        # We replace the invocation pattern `&& <python_exec_path>` with
+        # `&& export PYTHONPATH=<site_packages_path>:${PYTHONPATH} && <python_exec_path>`
+        # This ensures the correct site-packages are prioritized after any other environment setups (like ROS2 sourcing).
+        search_pattern = f"&& {python_exec_path}"
+        if search_pattern in cmd:
+            replacement_pattern = f"&& export PYTHONPATH={site_packages_path}:${{PYTHONPATH}} && {python_exec_path}"
+            cmd = cmd.replace(search_pattern, replacement_pattern, 1) # Replace only the first occurrence
+
     full_cmd = f"conda run {env_selector} --no-capture-output bash -c 'cd {cwd} && {cmd}'"
     stdin = None if interactive else subprocess.DEVNULL
     return subprocess.run(
