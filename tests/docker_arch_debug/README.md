@@ -23,11 +23,22 @@ docker run -it --rm \
 ## Inside the container
 
 Git volume-mount ownership fix (required once per session):
+
 ```bash
 git config --global --add safe.directory /workspace
 ```
 
+Populate submodules needed by the install targets:
+
+```bash
+# Required for inference custom
+git submodule update --init modules/third_party/holosoma_custom
+# Required for deployment (handled automatically by install.sh, but run if missing)
+git submodule update --init modules/04_deployment/unitree_ros2
+```
+
 Then run any install target:
+
 ```bash
 ./install.sh willow
 ./install.sh inference custom
