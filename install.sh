@@ -369,8 +369,13 @@ install_inference_custom() {
   _make_fake_sudo_skip_apt "$FAKE_DIR"
   _clean_bash WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_inference.sh"
   rm -rf "$FAKE_DIR"
-  # tyro is not a dependency of holosoma_inference — install it explicitly.
-  "$CUSTOM_CONDA/envs/hscinference/bin/python" -m pip install tyro --quiet
+  # Guarantee packages land in hscinference regardless of which pip setup_inference.sh used.
+  local PYTHON="$CUSTOM_CONDA/envs/hscinference/bin/python"
+  "$PYTHON" -m pip install \
+    -e "$REPO_ROOT/modules/third_party/holosoma_custom/src/holosoma_inference[unitree]" --quiet
+  if [[ "$(uname -m)" == "aarch64" ]]; then
+    "$PYTHON" -m pip install "pin>=3.8.0" --quiet
+  fi
 }
 
 # --------------------------------------------------------------------------
