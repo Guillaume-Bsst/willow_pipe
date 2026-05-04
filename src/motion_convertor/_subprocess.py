@@ -4,7 +4,6 @@ Reads cfg/ yamls to get env names and command templates.
 """
 import os
 import subprocess
-import sys
 import yaml
 from pathlib import Path
 
