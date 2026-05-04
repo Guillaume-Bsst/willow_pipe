@@ -368,7 +368,7 @@ install_inference_custom() {
   _clean_bash WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_inference.sh"
   rm -rf "$FAKE_DIR"
   # tyro is not a dependency of holosoma_inference — install it explicitly.
-  "$CUSTOM_CONDA/envs/hscinference/bin/pip" install tyro --quiet
+  "$CUSTOM_CONDA/envs/hscinference/bin/python" -m pip install tyro --quiet
 }
 
 # --------------------------------------------------------------------------
