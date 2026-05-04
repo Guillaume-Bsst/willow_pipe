@@ -14,7 +14,7 @@ entry_points:
       export PATH=$PATH:$HOME/.willow_deps/miniconda3/envs/unitree_control_interface/bin &&
       source modules/04_deployment/unitree_ros2/cyclonedds_ws/install/setup.bash &&
       source <(ros2 run unitree_control_interface autoset_environment_dds.py SIMULATION) &&
-      export PYTHONPATH=$PWD/modules/third_party/holosoma_custom/src/holosoma_inference:$PYTHONPATH &&
+      export PYTHONPATH=$PWD/modules/third_party/holosoma_custom/src/holosoma_inference:$HOME/.holosoma_custom_deps/miniconda3/envs/hscinference/lib/python3.11/site-packages:$PYTHONPATH &&
       $HOME/.holosoma_custom_deps/miniconda3/envs/hscinference/bin/python modules/03_inference/holosoma_inference_custom/run_policy.py
     extra_args: "--robot.sdk-type ros2"
     args:

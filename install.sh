@@ -362,8 +362,10 @@ install_inference_custom() {
       --prefix "$CUSTOM_CONDA/envs/hscinference" \
       swig pip -c conda-forge --quiet
   fi
+  # Create bin/pip wrapper so conda activate hscinference picks it up before
+  # the base conda pip (which would install to the wrong Python 3.13 site-packages).
+  _make_fake_pip "$CUSTOM_CONDA/envs/hscinference/bin" "$CUSTOM_CONDA/envs/hscinference/bin/python"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
-  _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscinference/bin/python"
   _make_fake_sudo_skip_apt "$FAKE_DIR"
   _clean_bash WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_inference.sh"
   rm -rf "$FAKE_DIR"
