@@ -469,7 +469,8 @@ install_deployment() {
     export PATH="$ENV_ROOT/bin:$PATH"
     export Python_ROOT_DIR="$ENV_ROOT"
     export Python3_ROOT_DIR="$ENV_ROOT"
-    export PYTHONPATH="$ENV_ROOT/lib/python3.11/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+    _PY_VER="$("$ENV_ROOT/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+    export PYTHONPATH="$ENV_ROOT/lib/python${_PY_VER}/site-packages${PYTHONPATH:+:$PYTHONPATH}"
     source "$ENV_ROOT/setup.bash"
 
     cd "$WS"
@@ -486,8 +487,8 @@ install_deployment() {
     colcon build --packages-select cyclonedds --cmake-args "${CMAKE_ARGS[@]}"
     source install/setup.bash
 
-    # B. Build all remaining packages
-    colcon build --packages-skip unitree_sdk2_python --cmake-args "${CMAKE_ARGS[@]}"
+    # B. Build all remaining packages (unitree_sdk2py = package name for src/unitree_sdk2_python)
+    colcon build --packages-skip unitree_sdk2py --cmake-args "${CMAKE_ARGS[@]}"
   )
 
   # Install unitree_sdk2_python (editable, needs CYCLONEDDS_HOME)
