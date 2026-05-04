@@ -487,6 +487,13 @@ install_deployment() {
     colcon build --packages-select cyclonedds --cmake-args "${CMAKE_ARGS[@]}"
     source install/setup.bash
 
+    # Reinstall cyclonedds python package from source to ensure _clayer is built (needed for aarch64)
+    (
+      export PATH="$ENV_ROOT/bin:$PATH"
+      export CYCLONEDDS_HOME="$WS/install/cyclonedds"
+      "$ENV_PYTHON" -m pip install "cyclonedds==0.10.5" --no-binary :all: --force-reinstall --quiet
+    )
+
     # B. Build all remaining packages (unitree_sdk2py = package name for src/unitree_sdk2_python)
     colcon build --packages-skip unitree_sdk2py --cmake-args "${CMAKE_ARGS[@]}"
   )
