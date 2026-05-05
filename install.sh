@@ -460,10 +460,13 @@ install_deployment() {
   if [[ ! -f "$ENV_ROOT/bin/vcs" ]]; then
     "$ENV_PYTHON" -m pip install vcstool --quiet
   fi
-  # Rewrite SSH URLs to HTTPS so vcs import works without a GitHub SSH key
+  # Rewrite SSH URLs to HTTPS so vcs import works without a GitHub SSH key.
+  # Use ||/explicit re-raise pattern so the --unset always runs even if vcs fails.
   git config --global url."https://github.com/".insteadOf "git@github.com:"
-  (cd "$SRC" && "$ENV_ROOT/bin/vcs" import --recursive --skip-existing < "$UCI_DIR/git-deps.yaml")
+  _vcs_status=0
+  (cd "$SRC" && "$ENV_ROOT/bin/vcs" import --recursive --skip-existing < "$UCI_DIR/git-deps.yaml") || _vcs_status=$?
   git config --global --unset url."https://github.com/".insteadOf
+  [[ $_vcs_status -eq 0 ]] || exit $_vcs_status
 
   # Build colcon workspace
   # set +u: ROS/robostack activate scripts reference CONDA_BUILD (unbound outside conda build)
