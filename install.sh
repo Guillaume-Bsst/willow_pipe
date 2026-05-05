@@ -74,7 +74,18 @@ _clean_bash() {
   env -u CONDA_PREFIX -u CONDA_DEFAULT_ENV -u CONDA_SHLVL \
       -u CONDA_EXE -u _CONDA_EXE -u CONDA_PYTHON_EXE \
       -u CONDA_PROMPT_MODIFIER -u _CONDA_ROOT -u _CE_M -u _CE_CONDA \
+      -u CONDARC -u CONDA_ENVS_PATH \
       "$@"
+}
+
+# Wrap _clean_bash with CONDA_ENVS_PATH set to the correct holosoma envs dir.
+# CONDA_ENVS_PATH prepends its value as the FIRST entry in envs_dirs, which forces
+# mamba create -n <env> to land in the right root (not ~/.willow_deps via ~/.condarc).
+_clean_bash_pinned() {
+  local envs_dir="$1"; shift
+  local status=0
+  _clean_bash CONDA_ENVS_PATH="$envs_dir" "$@" || status=$?
+  return $status
 }
 
 _ensure_mamba() {
@@ -257,7 +268,7 @@ install_retargeting_upstream() {
   _header "holosoma upstream — hsretargeting"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsretargeting/bin/python"
-  _clean_bash PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_retargeting.sh"
+  _clean_bash_pinned "$HOME/.holosoma_deps/miniconda3/envs" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_retargeting.sh"
   rm -rf "$FAKE_DIR"
 
   # Install human_body_prior from submodule (needed for AMASS/SFU preprocessing)
@@ -271,7 +282,7 @@ install_mujoco_upstream() {
   _header "holosoma upstream — hsmujoco"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsmujoco/bin/python"
-  _clean_bash PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_mujoco.sh" $NO_WARP
+  _clean_bash_pinned "$HOME/.holosoma_deps/miniconda3/envs" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_mujoco.sh" $NO_WARP
   rm -rf "$FAKE_DIR"
 }
 
@@ -279,7 +290,7 @@ install_isaacgym_upstream() {
   _header "holosoma upstream — hsgym"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsgym/bin/python"
-  _clean_bash PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_isaacgym.sh"
+  _clean_bash_pinned "$HOME/.holosoma_deps/miniconda3/envs" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_isaacgym.sh"
   rm -rf "$FAKE_DIR"
 }
 
@@ -288,7 +299,7 @@ install_isaacsim_upstream() {
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hssim/bin/python"
   _make_fake_sudo_skip_apt "$FAKE_DIR"
-  _clean_bash OMNI_KIT_ACCEPT_EULA=1 PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_isaacsim.sh"
+  _clean_bash_pinned "$HOME/.holosoma_deps/miniconda3/envs" OMNI_KIT_ACCEPT_EULA=1 PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_isaacsim.sh"
   rm -rf "$FAKE_DIR"
 }
 
@@ -308,7 +319,7 @@ install_inference_upstream() {
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsinference/bin/python"
   _make_fake_sudo_skip_apt "$FAKE_DIR"
-  _clean_bash PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_inference.sh"
+  _clean_bash_pinned "$HOME/.holosoma_deps/miniconda3/envs" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_inference.sh"
   rm -rf "$FAKE_DIR"
 }
 
@@ -320,7 +331,7 @@ install_retargeting_custom() {
   _header "holosoma_custom — hscretargeting"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscretargeting/bin/python"
-  _clean_bash WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_retargeting.sh"
+  _clean_bash_pinned "$HOME/.holosoma_custom_deps/miniconda3/envs" WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_retargeting.sh"
   rm -rf "$FAKE_DIR"
 }
 
@@ -328,7 +339,7 @@ install_mujoco_custom() {
   _header "holosoma_custom — hscmujoco"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscmujoco/bin/python"
-  _clean_bash WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_mujoco.sh" $NO_WARP
+  _clean_bash_pinned "$HOME/.holosoma_custom_deps/miniconda3/envs" WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_mujoco.sh" $NO_WARP
   rm -rf "$FAKE_DIR"
 }
 
@@ -336,7 +347,7 @@ install_isaacgym_custom() {
   _header "holosoma_custom — hscgym"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscgym/bin/python"
-  _clean_bash WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_isaacgym.sh"
+  _clean_bash_pinned "$HOME/.holosoma_custom_deps/miniconda3/envs" WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_isaacgym.sh"
   rm -rf "$FAKE_DIR"
 }
 
@@ -345,7 +356,7 @@ install_isaacsim_custom() {
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscsim/bin/python"
   _make_fake_sudo_skip_apt "$FAKE_DIR"
-  _clean_bash OMNI_KIT_ACCEPT_EULA=1 WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_isaacsim.sh"
+  _clean_bash_pinned "$HOME/.holosoma_custom_deps/miniconda3/envs" OMNI_KIT_ACCEPT_EULA=1 WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_isaacsim.sh"
   rm -rf "$FAKE_DIR"
 }
 
@@ -367,7 +378,7 @@ install_inference_custom() {
   _make_fake_pip "$CUSTOM_CONDA/envs/hscinference/bin" "$CUSTOM_CONDA/envs/hscinference/bin/python"
   local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
   _make_fake_sudo_skip_apt "$FAKE_DIR"
-  _clean_bash WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_inference.sh"
+  _clean_bash_pinned "$HOME/.holosoma_custom_deps/miniconda3/envs" WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_inference.sh"
   rm -rf "$FAKE_DIR"
   # Guarantee packages land in hscinference regardless of which pip setup_inference.sh used.
   local PYTHON="$CUSTOM_CONDA/envs/hscinference/bin/python"
@@ -405,7 +416,7 @@ install_deployment() {
   # Clone unitree_control_interface into workspace if missing
   if [[ ! -d "$UCI_DIR" ]]; then
     echo "  Cloning unitree_control_interface..."
-    git clone https://github.com/inria-paris-robotics-lab/unitree_control_interface.git \
+    git clone -b retargeting_g1 https://github.com/inria-paris-robotics-lab/unitree_control_interface.git \
       --recursive "$UCI_DIR"
   else
     _ok "unitree_control_interface already cloned"
@@ -449,14 +460,6 @@ install_deployment() {
   if [[ ! -f "$ENV_ROOT/bin/vcs" ]]; then
     "$ENV_PYTHON" -m pip install vcstool --quiet
   fi
-  # Remove directories that exist but are not valid git repos (broken clone from a
-  # previous failed SSH attempt) so vcs --skip-existing doesn't silently skip them.
-  for _dir in "$SRC"/*/; do
-    if [[ -d "$_dir" ]] && [[ ! -d "$_dir/.git" ]]; then
-      echo "  Removing incomplete clone: $_dir"
-      rm -rf "$_dir"
-    fi
-  done
   # Rewrite SSH URLs to HTTPS so vcs import works without a GitHub SSH key
   git config --global url."https://github.com/".insteadOf "git@github.com:"
   (cd "$SRC" && "$ENV_ROOT/bin/vcs" import --recursive --skip-existing < "$UCI_DIR/git-deps.yaml")
