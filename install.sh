@@ -422,13 +422,6 @@ install_deployment() {
     _ok "unitree_control_interface already cloned"
   fi
 
-  # Pin python=3.11 in environment.yaml so robostack doesn't drift to another version.
-  # unitree_control_interface is a cloned repo we don't own — patch it locally.
-  if ! grep -q "python=3.11" "$UCI_DIR/environment.yaml"; then
-    sed -i 's/^dependencies:/dependencies:\n- python=3.11/' "$UCI_DIR/environment.yaml"
-    _ok "pinned python=3.11 in environment.yaml"
-  fi
-
   if [[ -f "$SENTINEL" ]]; then
     _ok "unitree_control_interface env already installed (sentinel found)"
     return
