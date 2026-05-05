@@ -440,6 +440,10 @@ install_deployment() {
     _ok "conda env '$UCI_ENV' already exists"
   fi
 
+  # Pin python=3.11 — environment.yaml doesn't specify it, robostack can resolve to any version.
+  echo "  Pinning python=3.11..."
+  "$WILLOW_CONDA_BIN" install -y python=3.11 -c conda-forge --prefix "$ENV_ROOT" --quiet
+
   # cmake 4.x breaks rosidl_generator_py (ROS Humble) — pin to 3.28
   echo "  Pinning cmake=3.28 (rosidl_generator_py compatibility)..."
   "$WILLOW_CONDA_BIN" install -y cmake=3.28 -c conda-forge --prefix "$ENV_ROOT" --quiet
