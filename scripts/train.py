@@ -86,6 +86,19 @@ def prepare_trainer_inputs(retarget_run: Path, retargeter: str, trainer: str, ro
     output_format = ret_cfg["native_output_format"]
     validate_format(output_format)
 
+    # Load retargeting run config to get task metadata
+    run_cfg_path = retarget_run / "config.yaml"
+    if run_cfg_path.exists():
+        with open(run_cfg_path) as f:
+            run_cfg = yaml.safe_load(f)
+    else:
+        run_cfg = {}
+
+    task_type = run_cfg.get("task_type", "robot_only")
+    # Default object_name is "ground" for robot_only, or whatever was in the run config
+    # (retarget.py doesn't explicitly save object_name in config.yaml yet, but we should support it)
+    object_name = run_cfg.get("object_name", "ground")
+
     suffix = output_format.rsplit("_", 1)[-1]
     _EXT_MAP = {"bvh": ".bvh", "npy": ".npy", "npz": ".npz", "pkl": ".pkl", "p": ".p", "pt": ".pt"}
     output_ext = _EXT_MAP[suffix]
@@ -122,11 +135,12 @@ def prepare_trainer_inputs(retarget_run: Path, retargeter: str, trainer: str, ro
         if trainer_input_path.exists():
             print(f"  [skip] {trainer_input_path.name} already exists")
         else:
-            print(f"  to_trainer_input → {trainer_input_path.name}")
+            print(f"  to_trainer_input → {trainer_input_path.name} (object: {object_name})")
             motion_convertor.to_trainer_input(
                 retargeter.lower(), trainer.lower(),
                 output_raw, trainer_input_path,
                 robot=robot,
+                object_name=object_name,
             )
 
         trainer_input_paths.append(trainer_input_path)

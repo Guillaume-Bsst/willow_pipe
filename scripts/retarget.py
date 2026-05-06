@@ -354,11 +354,18 @@ def main():
             continue
 
     config_out = run_dir / "config.yaml"
+    # Extraction logic for object_name (could be expanded)
+    object_name = "ground"
+    if task_type == "object_interaction":
+        # This is where we'd extract it if it were a CLI arg. 
+        # For now, it's often hardcoded in retargeter examples, but let's save the default.
+        object_name = "largebox" 
+
     with open(config_out, "w") as f:
         yaml.dump({
             "dataset": dataset, "robot": robot, "retargeter": retargeter,
-            "task_type": task_type, "run_dir": str(run_dir),
-            "sequences": args.sequences,
+            "task_type": task_type, "object_name": object_name,
+            "run_dir": str(run_dir), "sequences": args.sequences,
         }, f)
 
     latest_link = run_parent / "latest"
