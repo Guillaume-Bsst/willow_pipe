@@ -23,6 +23,7 @@ def conda_run(
     check: bool = True,
     interactive: bool = False,
     prefix: str | None = None,
+    env_vars: dict | None = None,
 ) -> subprocess.CompletedProcess:
     """
     Run a shell command inside a conda environment.
@@ -43,7 +44,11 @@ def conda_run(
     else:
         env_selector = f"-n {env}"
 
-    full_cmd = f"conda run {env_selector} --no-capture-output bash -c 'cd {cwd} && {cmd}'"
+    env_prefix = ""
+    if env_vars:
+        env_prefix = " ".join(f"{k}={v}" for k, v in env_vars.items()) + " "
+
+    full_cmd = f"conda run {env_selector} --no-capture-output bash -c 'cd {cwd} && {env_prefix}{cmd}'"
     stdin = None if interactive else subprocess.DEVNULL
     return subprocess.run(
         full_cmd,

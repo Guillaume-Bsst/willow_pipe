@@ -182,6 +182,7 @@ def run_training(
     env = sim_cfg["env"]
     base_cmd = sim_cfg["cmd"]
     extra_args = sim_cfg.get("extra_args", "")
+    env_vars = sim_cfg.get("env_vars")
     arg_map = cfg.get("args", {})
 
     exp_name = _resolve_exp_name(cfg, robot, simulator, algo, with_object)
@@ -205,7 +206,7 @@ def run_training(
     if checkpoint:
         cmd += f" {arg_map['checkpoint']} {checkpoint}"
 
-    conda_run(env, cmd, cwd=repo_root(), interactive=True)
+    conda_run(env, cmd, cwd=repo_root(), interactive=True, env_vars=env_vars)
 
 
 def main():

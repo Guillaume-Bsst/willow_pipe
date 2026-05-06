@@ -16,6 +16,8 @@ simulators:
   isaacsim:
     env: hssim
     setup_script: modules/third_party/holosoma/scripts/source_isaacsim_setup.sh
+    env_vars:
+      OMNI_KIT_ACCEPT_EULA: "1"
     cmd: python modules/02_training/holosoma/train_agent.py
     extra_args: simulator:isaacsim
 
