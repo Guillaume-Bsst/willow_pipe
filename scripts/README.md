@@ -87,12 +87,13 @@ config.yaml
 
 **Supported dataset/retargeter combinations:**
 
-| Dataset | GMR | holosoma |
-|---------|-----|----------|
-| LAFAN | ✅ | ✅ |
-| SFU | ✅ | ✅ |
-| OMOMO robot_only | ✅ | ✅ |
-| OMOMO object_interaction | ❌ | ✅ |
+| Dataset | GMR | holosoma | holosoma_custom |
+|---------|-----|----------|-----------------|
+| LAFAN | ✅ | ✅ | ✅ |
+| SFU | ✅ | ✅ | ✅ |
+| OMOMO_NEW | ❌ | ✅ | ✅ |
+| OMOMO robot_only | ❌ | 🚧 WIP | 🚧 WIP |
+| OMOMO object_interaction | ❌ | 🚧 WIP | 🚧 WIP |
 
 **Examples:**
 ```bash
@@ -113,13 +114,12 @@ python scripts/retarget.py \
     --sequences 0005_2FeetJump001_stageii \
     --visualize
 
-# OMOMO — holosoma_custom, object_interaction, G1_27dof
+# OMOMO_NEW — holosoma_custom, object_interaction, G1_27dof
 python scripts/retarget.py \
-    --dataset OMOMO \
+    --dataset OMOMO_NEW \
     --robot G1_27dof \
     --retargeter holosoma_custom \
-    --task-type object_interaction \
-    --sequences sub3_largebox_003
+    --task-type object_interaction
 ```
 
 ---
