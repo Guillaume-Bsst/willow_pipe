@@ -89,10 +89,11 @@ config.yaml
 
 | Dataset | GMR | holosoma | holosoma_custom |
 |---------|-----|----------|-----------------|
-| LAFAN | ✅ | ✅ | ✅ |
-| SFU | ✅ | ✅ | ✅ |
-| OMOMO_NEW | ❌ | ✅ | ✅ |
-| OMOMO robot_only | ❌ | 🚧 WIP | 🚧 WIP |
+| LAFAN robot_only | ✅ | ✅ | ✅ |
+| SFU robot_only | ✅ | ✅ | ✅ |
+| OMOMO_NEW robot_only | ❌ | ✅ | ✅ |
+| OMOMO_NEW object_interaction | ❌ | ✅ | ✅ |
+| OMOMO robot_only | ✅ | ✅ | ✅ |
 | OMOMO object_interaction | ❌ | 🚧 WIP | 🚧 WIP |
 
 **Examples:**

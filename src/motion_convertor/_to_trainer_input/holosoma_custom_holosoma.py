@@ -21,6 +21,8 @@ def convert(
     robot: str = "G1_29dof",
     input_fps: int = 30,
     output_fps: int = 50,
+    object_name: str = "ground",
+    **kwargs,
 ) -> None:
     output_raw_path = Path(output_raw_path)
     out_path = Path(out_path)
@@ -46,6 +48,7 @@ def convert(
         f"--robot_dof {robot_dof} "
         f"--input_fps {input_fps} "
         f"--output_fps {output_fps} "
+        f"--object_name {object_name} "
         f"--retargeter_root {retargeter_root}"
     )
     conda_run(_ENV, cmd, cwd=repo_root())

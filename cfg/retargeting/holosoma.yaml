@@ -19,7 +19,9 @@ entry_point_by_input_format:
 format_args:
   holosoma_npy:       {data_format: lafan}
   holosoma_smplx_npz: {data_format: smplx}
-  holosoma_smplh_npz: {data_format: smplh}
+  # HACK: Use 'smplx' label for OMOMO .npz to bypass Holosoma's hardcoded 
+  # expectation that 'smplh' label MUST be a .pt file.
+  holosoma_smplh_npz: {data_format: smplx}
   holosoma_pt:        {data_format: smplh}
 
 robot_config:
