@@ -416,7 +416,7 @@ install_deployment() {
   # Clone unitree_control_interface into workspace if missing
   if [[ ! -d "$UCI_DIR" ]]; then
     echo "  Cloning unitree_control_interface..."
-    git clone -b retargeting_g1 https://github.com/inria-paris-robotics-lab/unitree_control_interface.git \
+    git clone -b watchdog-logging https://github.com/inria-paris-robotics-lab/unitree_control_interface.git \
       --recursive "$UCI_DIR"
   else
     _ok "unitree_control_interface already cloned"
