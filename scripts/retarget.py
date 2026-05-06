@@ -297,7 +297,8 @@ def main():
         task_suffix = "robot" if task_type == "robot_only" else "object"
         dataset_dir = f"OMOMO_{task_suffix}_{robot}"
     elif dataset == "OMOMO_NEW":
-        dataset_dir = f"OMOMO_new_object_{robot}"
+        task_suffix = "robot" if task_type == "robot_only" else "object"
+        dataset_dir = f"OMOMO_new_{task_suffix}_{robot}"
     else:
         dataset_dir = f"{dataset}_{robot}"
 

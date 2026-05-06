@@ -54,7 +54,8 @@ def _retarget_dataset_dir(dataset: str, robot: str, retarget_task_type: str) -> 
         suffix = "object" if retarget_task_type == "object_interaction" else "robot"
         return f"OMOMO_{suffix}_{robot}"
     if dataset == "OMOMO_NEW":
-        return f"OMOMO_new_object_{robot}"
+        suffix = "robot" if retarget_task_type == "robot_only" else "object"
+        return f"OMOMO_new_{suffix}_{robot}"
     return f"{dataset}_{robot}"
 
 
