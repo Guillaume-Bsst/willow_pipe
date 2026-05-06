@@ -78,7 +78,7 @@ def resolve_retarget_run(dataset: str, robot: str, retargeter: str, run_id: str,
     return run_dir
 
 
-def prepare_trainer_inputs(retarget_run: Path, retargeter: str, trainer: str) -> list[Path]:
+def prepare_trainer_inputs(retarget_run: Path, retargeter: str, trainer: str, robot: str) -> list[Path]:
     from motion_convertor._subprocess import load_module_cfg
     from motion_convertor.formats import validate_format
 
@@ -93,15 +93,21 @@ def prepare_trainer_inputs(retarget_run: Path, retargeter: str, trainer: str) ->
     output_raw_files = sorted(retarget_run.glob(f"*_output_raw{output_ext}"))
 
     # Retargeters that receive --save_dir may name output files themselves
-    # (e.g. holosoma writes {seq_name}_original.npz). Rename to _output_raw
-    # so downstream steps are consistent.
+    # (e.g. holosoma writes {seq_name}_original.npz, or generic retargeted.npz).
+    # Rename to _output_raw so downstream steps are consistent.
     if not output_raw_files:
         candidates = [
             f for f in retarget_run.glob(f"*{output_ext}")
             if "_input" not in f.name and "unified" not in f.name and "trainer_input" not in f.name
         ]
         for candidate in candidates:
-            normalized = retarget_run / candidate.name.replace("_original", "_output_raw")
+            if "_original" in candidate.name:
+                normalized = retarget_run / candidate.name.replace("_original", "_output_raw")
+            elif "_output_raw" not in candidate.name:
+                normalized = retarget_run / f"{candidate.stem}_output_raw{output_ext}"
+            else:
+                normalized = candidate
+
             if normalized != candidate:
                 candidate.rename(normalized)
                 print(f"  renamed {candidate.name} → {normalized.name}")
@@ -120,6 +126,7 @@ def prepare_trainer_inputs(retarget_run: Path, retargeter: str, trainer: str) ->
             motion_convertor.to_trainer_input(
                 retargeter.lower(), trainer.lower(),
                 output_raw, trainer_input_path,
+                robot=robot,
             )
 
         trainer_input_paths.append(trainer_input_path)
@@ -194,10 +201,13 @@ def run_training(
         cmd += f" {extra_args}"
     cmd += f" logger:{logger_type}"
 
+    if not trainer_input_paths:
+        raise ValueError(f"No trainer sequences found. Ensure retargeting outputs are present.")
+
     if "motion_dir" in arg_map:
-        motion_input = trainer_input_paths[0].parent if trainer_input_paths else policy_run_dir
+        motion_input = trainer_input_paths[0].parent
     else:
-        motion_input = trainer_input_paths[0] if trainer_input_paths else policy_run_dir
+        motion_input = trainer_input_paths[0]
     cmd += f" {arg_map.get('motion_dir', arg_map.get('motion_file'))} {motion_input}"
 
     cmd += f" {arg_map['output_dir']} {policy_run_dir}"
@@ -259,7 +269,7 @@ def main():
 
     # Prepare trainer inputs
     print("Preparing trainer inputs...")
-    trainer_inputs = prepare_trainer_inputs(retarget_run, retargeter, trainer)
+    trainer_inputs = prepare_trainer_inputs(retarget_run, retargeter, trainer, robot)
     print(f"  {len(trainer_inputs)} sequences ready")
 
     # Create policy run directory
