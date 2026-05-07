@@ -30,7 +30,7 @@ robot_config:
   G1_27dof:
     urdf: modules/01_retargeting/holosoma_retargeting_custom/models/g1/g1_27dof.urdf
 
-env: hscretargeting
+env: hsretargeting
 
 wrappers:
   convert: src/motion_convertor/wrappers/holosoma_convert.py

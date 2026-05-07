@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-holosoma data conversion wrapper — runs in `hsretargeting` or `hscretargeting` conda environment.
+holosoma data conversion wrapper — runs in the `hsretargeting` conda environment.
 
 Thin CLI shim around holosoma's convert_data_format_mj.py.
 Reads a retargeter output .npz (containing qpos), runs the MuJoCo simulation

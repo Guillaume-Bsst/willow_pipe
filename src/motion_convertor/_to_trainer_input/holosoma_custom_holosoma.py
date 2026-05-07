@@ -1,7 +1,7 @@
 """
 holosoma_custom retargeter output → holosoma trainer input (form B).
 
-Same logic as holosoma_holosoma.py but runs in the hscretargeting conda env
+Same logic as holosoma_holosoma.py but runs in the hsretargeting conda env
 (Guillaume-Bsst/holosoma_custom ecosystem).
 """
 import re
@@ -11,7 +11,7 @@ from .._subprocess import conda_run
 from .._config import repo_root
 
 _WRAPPER = "src/motion_convertor/wrappers/holosoma_convert.py"
-_ENV = "hscretargeting"
+_ENV = "hsretargeting"
 _RETARGETER_ROOT = "modules/01_retargeting/holosoma_retargeting_custom"
 
 

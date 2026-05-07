@@ -2,65 +2,35 @@
 # =============================================================================
 # Willow WBT — centralized installer
 #
-# Three miniconda ecosystems, fully isolated:
+# ~/.willow_deps/miniconda3/
+#   envs/willow_wbt/                ← adapter layer + scripts
+#   envs/gmr/                       ← GMR retargeter
+#   envs/interact/                  ← InterAct preprocessing
+#   envs/unitree_control_interface/ ← deployment (ROS2 + unitree SDK)
 #
-#   ~/.willow_deps/miniconda3/
-#     envs/willow_wbt/               ← adapter layer + scripts
-#     envs/gmr/                      ← GMR retargeter
-#     envs/unitree_control_interface/ ← deployment (ROS2 + unitree SDK)
-#
-#   ~/.holosoma_deps/miniconda3/     ← holosoma upstream
-#     envs/hsretargeting/
-#     envs/hsmujoco/
-#     envs/hsgym/
-#     envs/hssim/
-#     envs/hsinference/
-#
-#   ~/.holosoma_custom_deps/miniconda3/ ← holosoma_custom (your fork)
-#     envs/hscretargeting/
-#     envs/hscmujoco/
-#     envs/hscgym/
-#     envs/hscsim/
-#     envs/hscinference/
+# ~/.holosoma_deps/miniconda3/      ← holosoma_custom envs
+#   envs/hsretargeting/
+#   envs/hsmujoco/  envs/hsgym/  envs/hssim/
+#   envs/hsinference/
 #
 # Usage:
-#   ./install.sh                        # install everything (all variants)
-#   ./install.sh willow                 # willow_wbt env only
-#   ./install.sh gmr                    # GMR env only
-#   ./install.sh interact               # InterAct env (OMOMO object_interaction)
-#   ./install.sh retargeting            # both holosoma variants
-#   ./install.sh retargeting upstream   # holosoma upstream only
-#   ./install.sh retargeting custom     # holosoma_custom only
-#   ./install.sh mujoco [upstream|custom] [--no-warp]
-#   ./install.sh isaacgym [upstream|custom]
-#   ./install.sh isaacsim [upstream|custom]
-#   ./install.sh inference [upstream|custom]
-#   ./install.sh deployment             # unitree_ros2 + unitree_control_interface
+#   ./install.sh all
+#   ./install.sh willow | gmr | interact
+#   ./install.sh holosoma_retargeting
+#   ./install.sh holosoma_training [mujoco|isaacgym|isaacsim] [--no-warp]
+#   ./install.sh holosoma_inference
+#   ./install.sh unitree_control_interface
 # =============================================================================
 set -euo pipefail
 
 REPO_ROOT="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 GMR_DIR="$REPO_ROOT/modules/01_retargeting/GMR"
+HOLOSOMA_SCRIPTS="$REPO_ROOT/modules/third_party/holosoma_custom/scripts"
 
-HOLOSOMA_UPSTREAM_SCRIPTS="$REPO_ROOT/modules/third_party/holosoma/scripts"
-HOLOSOMA_CUSTOM_SCRIPTS="$REPO_ROOT/modules/third_party/holosoma_custom/scripts"
-
-# willow's own miniconda (willow_wbt + gmr + unitree_control_interface)
 WILLOW_CONDA_ROOT="$HOME/.willow_deps/miniconda3"
-WILLOW_CONDA_BIN="$WILLOW_CONDA_ROOT/bin/conda"
-WILLOW_MAMBA_BIN="$WILLOW_CONDA_ROOT/bin/mamba"
+HOLOSOMA_CONDA_ROOT="$HOME/.holosoma_deps/miniconda3"
 
-# --------------------------------------------------------------------------
-# Parse arguments
-# --------------------------------------------------------------------------
 TARGET="${1:-all}"
-VARIANT="${2:-both}"   # upstream | custom | both
-NO_WARP=""
-
-for arg in "$@"; do
-  [[ "$arg" == "--no-warp" ]] && NO_WARP="--no-warp"
-done
-[[ "$VARIANT" == "--no-warp" ]] && VARIANT="both"
 
 # --------------------------------------------------------------------------
 # Helpers
@@ -68,335 +38,238 @@ done
 _header() { echo ""; echo "══════════════════════════════════════════"; echo "  $1"; echo "══════════════════════════════════════════"; }
 _ok()     { echo "  ✓ $1"; }
 
-# Run a script in a shell with all conda state stripped, so the active
-# willow_wbt env does not bleed into holosoma's mamba env resolution.
-_clean_bash() {
+# Bootstraps miniforge at $root and ensures mamba is installed
+_ensure_conda() {
+  local root="$1" deps_dir="$2"
+  if [[ ! -d "$root" ]]; then
+    _header "Bootstrapping miniforge → $root"
+    mkdir -p "$deps_dir"
+    local os arch installer
+    os="$(uname -s)"; arch="$(uname -m)"
+    if   [[ "$os" == "Linux"  && "$arch" == "aarch64" ]]; then installer="Miniforge3-Linux-aarch64.sh"
+    elif [[ "$os" == "Linux"  ]];                          then installer="Miniforge3-Linux-x86_64.sh"
+    elif [[ "$os" == "Darwin" && "$arch" == "arm64"   ]]; then installer="Miniforge3-MacOSX-arm64.sh"
+    elif [[ "$os" == "Darwin" ]];                          then installer="Miniforge3-MacOSX-x86_64.sh"
+    else echo "ERROR: unsupported OS: $os" >&2; exit 1; fi
+    local tmp="$deps_dir/miniforge_install.sh"
+    curl -fsSL "https://github.com/conda-forge/miniforge/releases/latest/download/$installer" -o "$tmp"
+    bash "$tmp" -b -u -p "$root" && rm "$tmp"
+  fi
+  
+  # We use --system so it only applies to the miniconda environments inside $root
+  "$root/bin/conda" config --system --add channels conda-forge
+  "$root/bin/conda" config --system --set channel_priority strict
+  # Remove 'defaults'. The "|| true" prevents the script from crashing if it's already removed.
+  "$root/bin/conda" config --system --remove channels defaults 2>/dev/null || true
+
+  [[ -f "$root/bin/mamba" ]] || \
+    "$root/bin/conda" install -y mamba -c conda-forge -n base --override-channels 
+}
+
+# Creates a conda env with mamba (skips if already exists)
+_create_env() {
+  local root="$1" name="$2" python="${3:-3.11}"
+  local env_root="$root/envs/$name"
+  [[ -d "$env_root" ]] && { _ok "env '$name' already exists"; return; }
+  "$root/bin/mamba" create -y --prefix "$env_root" python="$python" \
+    -c conda-forge --override-channels 
+}
+
+# Installs packages with uv into a conda env (bootstraps uv on first call)
+_uv_pip() {
+  local env_root="$1"; shift
+  [[ -f "$env_root/bin/uv" ]] || "$env_root/bin/python" -m pip install uv 
+  UV_HTTP_TIMEOUT=300 "$env_root/bin/uv" pip install --python "$env_root/bin/python" --system "$@"
+}
+
+# Strips active conda state so holosoma scripts resolve envs in the right root
+_clean_bash_pinned() {
+  local envs_dir="$1"; shift
   env -u CONDA_PREFIX -u CONDA_DEFAULT_ENV -u CONDA_SHLVL \
       -u CONDA_EXE -u _CONDA_EXE -u CONDA_PYTHON_EXE \
       -u CONDA_PROMPT_MODIFIER -u _CONDA_ROOT -u _CE_M -u _CE_CONDA \
       -u CONDARC -u CONDA_ENVS_PATH \
-      "$@"
+      CONDA_ENVS_PATH="$envs_dir" "$@"
 }
 
-# Wrap _clean_bash with CONDA_ENVS_PATH set to the correct holosoma envs dir.
-# CONDA_ENVS_PATH prepends its value as the FIRST entry in envs_dirs, which forces
-# mamba create -n <env> to land in the right root (not ~/.willow_deps via ~/.condarc).
-_clean_bash_pinned() {
-  local envs_dir="$1"; shift
-  local status=0
-  _clean_bash CONDA_ENVS_PATH="$envs_dir" "$@" || status=$?
-  return $status
-}
+# Pre-creates a holosoma env and writes a uv-backed pip shim into the env's bin/.
+# Problem: setup scripts run 'source conda activate', which prepends the env's bin/
+# to PATH — shadowing any fake pip we put in a temp dir. By writing our shim directly
+# into the env's bin/ BEFORE the script runs, conda activation exposes our shim first.
+# The shim filters 'pip install pip' to a no-op so uv doesn't overwrite itself.
+# Usage: _holosoma_prep_env <env_name> <python_ver> [extra_conda_pkgs...]
+_holosoma_prep_env() {
+  local env_name="$1" python_ver="$2"; shift 2
+  local env_root="$HOLOSOMA_CONDA_ROOT/envs/$env_name"
 
-_ensure_mamba() {
-  local root="$1"
-  local conda="$root/bin/conda"
-  local mamba="$root/bin/mamba"
-  if [[ -d "$root" ]] && [[ ! -f "$mamba" ]]; then
-    echo "  Installing mamba in $root..."
-    "$conda" install -y mamba -c conda-forge -n base --quiet
-  fi
-}
-
-# Build a fake pip wrapper that calls python -m pip on a given env.
-# Uses a dynamic lookup so it works even before the env is created
-# (the env is created by the setup script itself before any pip call).
-_make_fake_pip() {
-  local fake_dir="$1"
-  local env_python="$2"   # absolute path to the env's python once created
-  cat > "$fake_dir/pip" <<FAKEPIP
-#!/usr/bin/env bash
-exec "$env_python" -m pip "\$@"
-FAKEPIP
-  chmod +x "$fake_dir/pip"
-}
-
-_make_fake_sudo_skip_apt() {
-  local fake_dir="$1"
-  cat > "$fake_dir/sudo" <<'FAKESUDO'
-#!/usr/bin/env bash
-if [[ "$*" == *"apt"* ]]; then
-  echo "[install.sh] skipping sudo apt (dependencies pre-installed via mamba)"
-  exit 0
-fi
-exec /usr/bin/sudo "$@"
-FAKESUDO
-  chmod +x "$fake_dir/sudo"
-}
-
-# --------------------------------------------------------------------------
-# Bootstrap willow miniforge (for willow_wbt, gmr, unitree_control_interface)
-# --------------------------------------------------------------------------
-_bootstrap_willow_miniconda() {
-  if [[ -d "$WILLOW_CONDA_ROOT" ]]; then 
-    _ensure_mamba "$WILLOW_CONDA_ROOT"
-    return
-  fi
-
-  _header "Bootstrapping willow miniforge → $WILLOW_CONDA_ROOT"
-  mkdir -p "$HOME/.willow_deps"
-
-  OS_NAME="$(uname -s)"; ARCH_NAME="$(uname -m)"
-  if [[ "$OS_NAME" == "Linux" ]]; then
-    if [[ "$ARCH_NAME" == "aarch64" ]]; then
-      INSTALLER="Miniforge3-Linux-aarch64.sh"
-    else
-      INSTALLER="Miniforge3-Linux-x86_64.sh"
-    fi
-  elif [[ "$OS_NAME" == "Darwin" ]]; then
-    if [[ "$ARCH_NAME" == "arm64" ]]; then
-      INSTALLER="Miniforge3-MacOSX-arm64.sh"
-    else
-      INSTALLER="Miniforge3-MacOSX-x86_64.sh"
-    fi
-  else
-    echo "ERROR: unsupported OS: $OS_NAME" >&2; exit 1
-  fi
-
-  TMP="$HOME/.willow_deps/miniforge_install.sh"
-  curl -fsSL "https://github.com/conda-forge/miniforge/releases/latest/download/${INSTALLER}" -o "$TMP"
-  bash "$TMP" -b -u -p "$WILLOW_CONDA_ROOT"
-  rm "$TMP"
-  
-  _ensure_mamba "$WILLOW_CONDA_ROOT"
-  _ok "willow miniforge installed at $WILLOW_CONDA_ROOT"
-}
-
-_ensure_willow_env() {
-  local name="$1" python="${2:-3.10}"
-  local env_root="$WILLOW_CONDA_ROOT/envs/$name"
   if [[ ! -d "$env_root" ]]; then
-    echo "  Creating env '$name' (python $python)..."
-    _ensure_mamba "$WILLOW_CONDA_ROOT"
-    MAMBA_ROOT_PREFIX="$WILLOW_CONDA_ROOT" "$WILLOW_MAMBA_BIN" create -y \
-      --prefix "$env_root" python="$python" -c conda-forge --override-channels
-    # Bootstrap uv into the new env for fast package installs
-    "$env_root/bin/python" -m pip install uv --quiet
-  else
-    _ok "env '$name' already exists in ~/.willow_deps"
+    _ensure_conda "$HOLOSOMA_CONDA_ROOT" "$HOME/.holosoma_deps"
+    "$HOLOSOMA_CONDA_ROOT/bin/mamba" create -y --prefix "$env_root" \
+      python="$python_ver" "$@" -c conda-forge --override-channels 
   fi
-}
 
-# Prefer uv if available in the env, fallback to python -m pip
-_uv_install() {
-  local env_root="$1"; shift
-  local force_pip=0
+  [[ -f "$env_root/bin/uv" ]] || "$env_root/bin/python" -m pip install uv 
 
-  for arg in "$@"; do
-    if [[ "$arg" == "--ignore-requires-python" ]]; then
-      force_pip=1
-      break
+  local uv_bin="$env_root/bin/uv"
+  local py_bin="$env_root/bin/python"
+  cat > "$env_root/bin/pip" <<PIPSHIM
+#!/usr/bin/env bash
+# Delegates to uv pip. 
+# Check if the command is install, to filter "pip install pip"
+if [[ "\$1" == "install" ]]; then
+  only_pip=1
+  for a in "\${@:2}"; do
+    if [[ -n "\$a" ]]; then
+        [[ "\$a" =~ ^- ]] && continue
+        [[ "\$a" =~ ^pip([>=<!@].*)?$ ]] && continue
+        only_pip=0; break
     fi
   done
-
-  if [[ -f "$env_root/bin/uv" && "$force_pip" -eq 0 ]]; then
-    "$env_root/bin/uv" pip install --python "$env_root/bin/python" --system "$@"
-  else
-    "$env_root/bin/python" -m pip install "$@"
-  fi
+  [[ \$only_pip -eq 1 ]] && exit 0
+  
+  # Filter out empty arguments that might cause PEP508 errors
+  args=()
+  for arg in "\$@"; do
+    [[ -n "\$arg" ]] && args+=("\$arg")
+  done
+  exec "$uv_bin" pip install "\${args[@]:1}"
+else
+  # For other commands (uninstall, list, etc), pass them through
+  exec "$uv_bin" pip "\$@"
+fi
+PIPSHIM
+  chmod +x "$env_root/bin/pip"
+  ln -sf pip "$env_root/bin/pip3"
 }
 
+# Runs a holosoma_custom setup script with isolated conda state.
+# Call _holosoma_prep_env first so the env's bin/pip is already the uv shim
+# before the setup script activates the env.
+# Usage: _holosoma_run [--sudo] [ENV=val ...] <env_name> <script> [script_args...]
+#   --sudo    also inject a fake sudo that silently skips apt calls
+#   ENV=val   extra environment variables forwarded to the script
+_holosoma_run() {
+  local with_sudo=0 extra_env=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --sudo) with_sudo=1; shift ;;
+      *=*)    extra_env+=("$1"); shift ;;
+      *)      break ;;
+    esac
+  done
+  local env_name="$1" script="$2"; shift 2
+
+  local fake_dir; fake_dir="$(mktemp -d)"
+
+  if [[ $with_sudo -eq 1 ]]; then
+    cat > "$fake_dir/sudo" <<'FAKESUDO'
+#!/usr/bin/env bash
+if [[ "$*" == *"apt"* ]]; then echo "[install.sh] skipping sudo apt"; exit 0; fi
+exec /usr/bin/sudo "$@"
+FAKESUDO
+    chmod +x "$fake_dir/sudo"
+  fi
+
+  _clean_bash_pinned "$HOLOSOMA_CONDA_ROOT/envs" \
+    WORKSPACE_DIR="$HOME/.holosoma_deps" \
+    ${extra_env[@]+"${extra_env[@]}"} \
+    PATH="$fake_dir:$PATH" \
+    bash "$script" "$@"
+  rm -rf "$fake_dir"
+}
 
 # --------------------------------------------------------------------------
-# willow_wbt
+# Installers
 # --------------------------------------------------------------------------
+
 install_willow() {
   _header "willow_wbt env"
-  _bootstrap_willow_miniconda
-  _ensure_willow_env "willow_wbt"
-  _uv_install "$WILLOW_CONDA_ROOT/envs/willow_wbt" -e "$REPO_ROOT"
-  _ok "willow_wbt installed (editable)"
+  _ensure_conda "$WILLOW_CONDA_ROOT" "$HOME/.willow_deps"
+  _create_env   "$WILLOW_CONDA_ROOT" "willow_wbt"
+  _uv_pip "$WILLOW_CONDA_ROOT/envs/willow_wbt" -e "$REPO_ROOT"
+  _ok "willow_wbt installed"
 }
 
-# --------------------------------------------------------------------------
-# GMR
-# --------------------------------------------------------------------------
 install_gmr() {
   _header "GMR env"
-  _bootstrap_willow_miniconda
-  _ensure_willow_env "gmr"
-  if [[ "$(uname -s)" == "Linux" ]]; then
-    MAMBA_ROOT_PREFIX="$WILLOW_CONDA_ROOT" "$WILLOW_CONDA_ROOT/bin/mamba" install -y \
-      --prefix "$WILLOW_CONDA_ROOT/envs/gmr" -c conda-forge libstdcxx-ng --quiet
-  fi
-  _uv_install "$WILLOW_CONDA_ROOT/envs/gmr" -e "$GMR_DIR"
-  _ok "GMR installed (editable)"
+  _ensure_conda "$WILLOW_CONDA_ROOT" "$HOME/.willow_deps"
+  _create_env   "$WILLOW_CONDA_ROOT" "gmr"
+  local ENV_ROOT="$WILLOW_CONDA_ROOT/envs/gmr"
+  [[ "$(uname -s)" == "Linux" ]] && \
+    "$WILLOW_CONDA_ROOT/bin/mamba" install -y --prefix "$ENV_ROOT" \
+      -c conda-forge libstdcxx-ng --override-channels 
+  _uv_pip "$ENV_ROOT" -e "$GMR_DIR"
+  _ok "GMR installed"
 }
 
-# --------------------------------------------------------------------------
-# InterAct — interact env (OMOMO object_interaction preprocessing)
-# --------------------------------------------------------------------------
 install_interact() {
-  _header "interact env (InterAct + InterMimic)"
-  _bootstrap_willow_miniconda
-  _ensure_willow_env "interact" "3.10"
-
+  _header "interact env"
+  _ensure_conda "$WILLOW_CONDA_ROOT" "$HOME/.willow_deps"
+  _create_env   "$WILLOW_CONDA_ROOT" "interact"
   local ENV_ROOT="$WILLOW_CONDA_ROOT/envs/interact"
-  local INTERACT_DIR="$REPO_ROOT/src/motion_convertor/third_party/InterAct"
-  local INTERMIMIC_DIR="$INTERACT_DIR/simulation"
 
-  # pytorch3d has no official pip wheel for torch 2.0 — install from source via conda-forge
-  # or skip CUDA and use the pre-built CPU wheel (sufficient for preprocessing)
-  _uv_install "$ENV_ROOT" \
-    torch==2.0.0 --index-url https://download.pytorch.org/whl/cpu
-  _uv_install "$ENV_ROOT" \
-    scipy trimesh joblib smplx tqdm numpy==1.23.1 poselib PyYAML \
+  _uv_pip "$ENV_ROOT" torch==2.0.0 --index-url https://download.pytorch.org/whl/cpu
+  _uv_pip "$ENV_ROOT" scipy trimesh joblib smplx tqdm numpy==1.23.1 poselib PyYAML \
     mujoco lxml numpy-stl opencv-python-headless
-  # human-body-prior from bundled submodule (same as hsretargeting)
-  _uv_install "$ENV_ROOT" \
-    --no-deps --ignore-requires-python \
+  # --ignore-requires-python: human_body_prior pins an old Python version; uv doesn't support
+  # this flag, so fall back to pip for this one package.
+  "$ENV_ROOT/bin/python" -m pip install --no-deps --ignore-requires-python \
     "$REPO_ROOT/src/motion_convertor/third_party/human_body_prior"
-  # pytorch3d — CPU-only prebuilt wheel for torch 2.0 / py3.10 / Linux
-  _uv_install "$ENV_ROOT" \
-    --find-links https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu117_pyt200/download.html \
+  # CPU-only pytorch3d prebuilt wheel; optional — no matching wheel for py311 but kept for future
+  _uv_pip "$ENV_ROOT" \
+    --find-links "https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu117_pyt200/download.html" \
     pytorch3d || true
-  # poselib (bundled in InterAct/simulation/poselib)
-  if [[ -f "$INTERMIMIC_DIR/poselib/setup.py" ]]; then
-    _uv_install "$ENV_ROOT" --no-deps -e "$INTERMIMIC_DIR/poselib"
-  fi
+  # poselib from bundled InterAct submodule (InterMimic dependency)
+  local POSELIB="$REPO_ROOT/src/motion_convertor/third_party/InterAct/simulation/poselib"
+  [[ -f "$POSELIB/setup.py" ]] && _uv_pip "$ENV_ROOT" --no-deps -e "$POSELIB"
 
   _ok "interact env installed"
 }
 
-# --------------------------------------------------------------------------
-# holosoma upstream  →  ~/.holosoma_deps/
-# (source_common.sh hardcodes ~/.holosoma_deps — upstream scripts untouched)
-# All setup_*.sh scripts create the env themselves before calling pip,
-# so the fake pip wrapper only needs to exist at call time, not before.
-# --------------------------------------------------------------------------
-install_retargeting_upstream() {
-  _header "holosoma upstream — hsretargeting"
-  local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
-  _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsretargeting/bin/python"
-  _clean_bash_pinned "$HOME/.holosoma_deps/miniconda3/envs" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_retargeting.sh"
-  rm -rf "$FAKE_DIR"
-
-  # Install human_body_prior from submodule (needed for AMASS/SFU preprocessing)
-  _header "human_body_prior → hsretargeting"
-  "$HOME/.holosoma_deps/miniconda3/envs/hsretargeting/bin/pip" install \
-    --no-deps --ignore-requires-python \
-    "$REPO_ROOT/src/motion_convertor/third_party/human_body_prior"
+install_holosoma_retargeting() {
+  _header "holosoma_custom — hsretargeting"
+  _holosoma_prep_env hsretargeting 3.11
+  _holosoma_run hsretargeting "$HOLOSOMA_SCRIPTS/setup_retargeting.sh"
+  _ok "hsretargeting installed"
 }
 
-install_mujoco_upstream() {
-  _header "holosoma upstream — hsmujoco"
-  local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
-  _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsmujoco/bin/python"
-  _clean_bash_pinned "$HOME/.holosoma_deps/miniconda3/envs" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_mujoco.sh" $NO_WARP
-  rm -rf "$FAKE_DIR"
+install_holosoma_training() {
+  _header "holosoma_custom — training envs"
+  local modules=() no_warp=""
+  for arg in "$@"; do
+    [[ "$arg" == "--no-warp" ]] && no_warp="--no-warp" || modules+=("$arg")
+  done
+  [[ ${#modules[@]} -eq 0 ]] && modules=(mujoco isaacgym isaacsim)
+
+  for mod in "${modules[@]}"; do
+    local script="$HOLOSOMA_SCRIPTS/setup_${mod}.sh"
+    [[ -f "$script" ]] || { echo "Warning: setup_${mod}.sh not found — skipping"; continue; }
+    _header "holosoma_custom — $mod"
+    case "$mod" in
+      mujoco)   _holosoma_prep_env hsmujoco 3.10
+                _holosoma_run           hsmujoco "$script" ${no_warp:+$no_warp} ;;
+      isaacgym) _holosoma_prep_env hsgym 3.8
+                _holosoma_run           hsgym    "$script" ;;
+      isaacsim) _holosoma_prep_env hssim 3.11
+                _holosoma_run --sudo OMNI_KIT_ACCEPT_EULA=1 hssim "$script" ;;
+      *)        _holosoma_run           hsmujoco "$script" ;;
+    esac
+  done
 }
 
-install_isaacgym_upstream() {
-  _header "holosoma upstream — hsgym"
-  local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
-  _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsgym/bin/python"
-  _clean_bash_pinned "$HOME/.holosoma_deps/miniconda3/envs" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_isaacgym.sh"
-  rm -rf "$FAKE_DIR"
+install_holosoma_inference() {
+  _header "holosoma_custom — hsinference"
+  _holosoma_prep_env hsinference 3.11 swig
+  _holosoma_run --sudo hsinference "$HOLOSOMA_SCRIPTS/setup_inference_py311.sh"
+  local ENV_ROOT="$HOLOSOMA_CONDA_ROOT/envs/hsinference"
+  # Install without [unitree]: unitree_sdk2 wheel is cp310-only; we use the ros2 interface.
+  _uv_pip "$ENV_ROOT" \
+    -e "$REPO_ROOT/modules/third_party/holosoma_custom/src/holosoma_inference"
+  [[ "$(uname -m)" == "aarch64" ]] && _uv_pip "$ENV_ROOT" "pin>=3.8.0"
+  _ok "hsinference installed"
 }
 
-install_isaacsim_upstream() {
-  _header "holosoma upstream — hssim"
-  local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
-  _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hssim/bin/python"
-  _make_fake_sudo_skip_apt "$FAKE_DIR"
-  _clean_bash_pinned "$HOME/.holosoma_deps/miniconda3/envs" OMNI_KIT_ACCEPT_EULA=1 PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_isaacsim.sh"
-  rm -rf "$FAKE_DIR"
-}
-
-install_inference_upstream() {
-  _header "holosoma upstream — hsinference"
-  local UPSTREAM_CONDA="$HOME/.holosoma_deps/miniconda3"
-  if [[ -d "$UPSTREAM_CONDA" ]] && [[ ! -d "$UPSTREAM_CONDA/envs/hsinference" ]]; then
-    echo "  Pre-installing swig via conda (no sudo required)..."
-    "$UPSTREAM_CONDA/bin/conda" create -y \
-      --prefix "$UPSTREAM_CONDA/envs/hsinference" \
-      python=3.10 swig pip -c conda-forge --quiet
-  elif [[ -d "$UPSTREAM_CONDA" ]]; then
-    "$UPSTREAM_CONDA/bin/conda" install -y \
-      --prefix "$UPSTREAM_CONDA/envs/hsinference" \
-      swig pip -c conda-forge --quiet
-  fi
-  local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
-  _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_deps/miniconda3/envs/hsinference/bin/python"
-  _make_fake_sudo_skip_apt "$FAKE_DIR"
-  _clean_bash_pinned "$HOME/.holosoma_deps/miniconda3/envs" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_UPSTREAM_SCRIPTS/setup_inference.sh"
-  rm -rf "$FAKE_DIR"
-}
-
-# --------------------------------------------------------------------------
-# holosoma_custom  →  ~/.holosoma_custom_deps/
-# Env names hardcoded hsc* in the fork scripts.
-# --------------------------------------------------------------------------
-install_retargeting_custom() {
-  _header "holosoma_custom — hscretargeting"
-  local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
-  _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscretargeting/bin/python"
-  _clean_bash_pinned "$HOME/.holosoma_custom_deps/miniconda3/envs" WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_retargeting.sh"
-  rm -rf "$FAKE_DIR"
-}
-
-install_mujoco_custom() {
-  _header "holosoma_custom — hscmujoco"
-  local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
-  _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscmujoco/bin/python"
-  _clean_bash_pinned "$HOME/.holosoma_custom_deps/miniconda3/envs" WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_mujoco.sh" $NO_WARP
-  rm -rf "$FAKE_DIR"
-}
-
-install_isaacgym_custom() {
-  _header "holosoma_custom — hscgym"
-  local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
-  _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscgym/bin/python"
-  _clean_bash_pinned "$HOME/.holosoma_custom_deps/miniconda3/envs" WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_isaacgym.sh"
-  rm -rf "$FAKE_DIR"
-}
-
-install_isaacsim_custom() {
-  _header "holosoma_custom — hscsim"
-  local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
-  _make_fake_pip "$FAKE_DIR" "$HOME/.holosoma_custom_deps/miniconda3/envs/hscsim/bin/python"
-  _make_fake_sudo_skip_apt "$FAKE_DIR"
-  _clean_bash_pinned "$HOME/.holosoma_custom_deps/miniconda3/envs" OMNI_KIT_ACCEPT_EULA=1 WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_isaacsim.sh"
-  rm -rf "$FAKE_DIR"
-}
-
-install_inference_custom() {
-  _header "holosoma_custom — hscinference"
-  local CUSTOM_CONDA="$HOME/.holosoma_custom_deps/miniconda3"
-  if [[ -d "$CUSTOM_CONDA" ]] && [[ ! -d "$CUSTOM_CONDA/envs/hscinference" ]]; then
-    echo "  Pre-installing swig via conda (no sudo required)..."
-    "$CUSTOM_CONDA/bin/conda" create -y \
-      --prefix "$CUSTOM_CONDA/envs/hscinference" \
-      python=3.11 swig pip -c conda-forge --quiet
-  elif [[ -d "$CUSTOM_CONDA" ]]; then
-    "$CUSTOM_CONDA/bin/conda" install -y \
-      --prefix "$CUSTOM_CONDA/envs/hscinference" \
-      swig pip -c conda-forge --quiet
-  fi
-  # Create bin/pip wrapper so conda activate hscinference picks it up before
-  # the base conda pip (which would install to the wrong Python 3.13 site-packages).
-  _make_fake_pip "$CUSTOM_CONDA/envs/hscinference/bin" "$CUSTOM_CONDA/envs/hscinference/bin/python"
-  local FAKE_DIR; FAKE_DIR="$(mktemp -d)"
-  _make_fake_sudo_skip_apt "$FAKE_DIR"
-  _clean_bash_pinned "$HOME/.holosoma_custom_deps/miniconda3/envs" WORKSPACE_DIR="$HOME/.holosoma_custom_deps" PATH="$FAKE_DIR:$PATH" bash "$HOLOSOMA_CUSTOM_SCRIPTS/setup_inference.sh"
-  rm -rf "$FAKE_DIR"
-  # Guarantee packages land in hscinference regardless of which pip setup_inference.sh used.
-  local PYTHON="$CUSTOM_CONDA/envs/hscinference/bin/python"
-  "$PYTHON" -m pip install \
-    -e "$REPO_ROOT/modules/third_party/holosoma_custom/src/holosoma_inference[unitree]" --quiet
-  if [[ "$(uname -m)" == "aarch64" ]]; then
-    "$PYTHON" -m pip install "pin>=3.8.0" --quiet
-  fi
-}
-
-# --------------------------------------------------------------------------
-# deployment — unitree_ros2 + unitree_control_interface
-#
-# Env: unitree_control_interface  →  ~/.willow_deps/miniconda3/envs/
-# Workspace (colcon build): modules/04_deployment/unitree_ros2/cyclonedds_ws/
-# Sentinel: ~/.willow_deps/.env_setup_finished_unitree_control_interface
-# --------------------------------------------------------------------------
-install_deployment() {
+install_unitree_control_interface() {
   _header "deployment — unitree_ros2 + unitree_control_interface"
 
   local WS="$REPO_ROOT/modules/04_deployment/unitree_ros2/cyclonedds_ws"
@@ -408,7 +281,7 @@ install_deployment() {
   local SENTINEL="$HOME/.willow_deps/.env_setup_finished_$UCI_ENV"
 
   # Bootstrap willow miniconda if needed
-  _bootstrap_willow_miniconda
+  _ensure_conda "$WILLOW_CONDA_ROOT" "$HOME/.willow_deps"
 
   # Ensure submodule is checked out
   git -C "$REPO_ROOT" submodule update --init modules/04_deployment/unitree_ros2
@@ -430,32 +303,31 @@ install_deployment() {
   # Create conda env in ~/.willow_deps/miniconda3/
   if [[ ! -d "$ENV_ROOT" ]]; then
     echo "  Creating conda env '$UCI_ENV' in ~/.willow_deps/..."
-    if [[ ! -f "$WILLOW_CONDA_ROOT/bin/mamba" ]]; then
-      "$WILLOW_CONDA_BIN" install -y mamba -c conda-forge -n base --quiet
-    fi
+    # (CORRIGÉ: _ensure_conda a déjà installé mamba, on peut l'appeler directement)
     MAMBA_ROOT_PREFIX="$WILLOW_CONDA_ROOT" "$WILLOW_CONDA_ROOT/bin/mamba" env create \
       --prefix "$ENV_ROOT" \
-      -f "$UCI_DIR/environment.yaml"
+      -f "$UCI_DIR/environment.yaml" -v
   else
     _ok "conda env '$UCI_ENV' already exists"
   fi
 
-  # Pin python=3.11 — environment.yaml doesn't specify it, robostack can resolve to any version.
+  local MAMBA_BIN="$WILLOW_CONDA_ROOT/bin/mamba"
+
+  # Pin python=3.11
   echo "  Pinning python=3.11..."
-  "$WILLOW_CONDA_BIN" install -y python=3.11 -c conda-forge --prefix "$ENV_ROOT" --quiet
+  "$MAMBA_BIN" install -y python=3.11 -c conda-forge --override-channels --prefix "$ENV_ROOT"
 
-  # cmake 4.x breaks rosidl_generator_py (ROS Humble) — pin to 3.28
+  # cmake 4.x breaks rosidl_generator_py
   echo "  Pinning cmake=3.28 (rosidl_generator_py compatibility)..."
-  "$WILLOW_CONDA_BIN" install -y cmake=3.28 -c conda-forge --prefix "$ENV_ROOT" --quiet
+  "$MAMBA_BIN" install -y cmake=3.28 -c conda-forge --override-channels --prefix "$ENV_ROOT"
 
-  # lttng-ust is the tracing backend required by rclcpp's TRACEPOINT macros.
-  # Without it, unitree_control_interface fails to compile on aarch64 with robostack.
+  # lttng-ust is the tracing backend
   echo "  Installing lttng-ust (rclcpp tracing backend)..."
-  "$WILLOW_CONDA_BIN" install -y lttng-ust -c conda-forge --prefix "$ENV_ROOT" --quiet
+  "$MAMBA_BIN" install -y lttng-ust -c conda-forge --override-channels --prefix "$ENV_ROOT"
 
   # Clone remaining deps via vcs (skip if already imported)
   if [[ ! -f "$ENV_ROOT/bin/vcs" ]]; then
-    "$ENV_PYTHON" -m pip install vcstool --quiet
+    "$ENV_PYTHON" -m pip install vcstool setuptools
   fi
   # Rewrite SSH URLs to HTTPS so vcs import works without a GitHub SSH key.
   # Use ||/explicit re-raise pattern so the --unset always runs even if vcs fails.
@@ -474,7 +346,10 @@ install_deployment() {
     export Python3_ROOT_DIR="$ENV_ROOT"
     _PY_VER="$("$ENV_ROOT/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
     export PYTHONPATH="$ENV_ROOT/lib/python${_PY_VER}/site-packages${PYTHONPATH:+:$PYTHONPATH}"
-    source "$ENV_ROOT/setup.bash"
+    
+    if [[ -f "$ENV_ROOT/setup.bash" ]]; then
+      source "$ENV_ROOT/setup.bash"
+    fi
 
     cd "$WS"
     CMAKE_ARGS=(
@@ -494,7 +369,7 @@ install_deployment() {
     (
       export PATH="$ENV_ROOT/bin:$PATH"
       export CYCLONEDDS_HOME="$WS/install/cyclonedds"
-      "$ENV_PYTHON" -m pip install "cyclonedds==0.10.5" --no-binary :all: --force-reinstall --quiet
+      "$ENV_PYTHON" -m pip install "cyclonedds==0.10.5" --no-binary :all: --force-reinstall 
     )
 
     # B. Build all remaining packages (unitree_sdk2py = package name for src/unitree_sdk2_python)
@@ -508,7 +383,7 @@ install_deployment() {
     cd "$WS"
     source install/setup.bash
     export CYCLONEDDS_HOME="$WS/install/cyclonedds"
-    "$ENV_PYTHON" -m pip install -e "$SRC/unitree_sdk2_python" --quiet
+    "$ENV_PYTHON" -m pip install -e "$SRC/unitree_sdk2_python" 
   )
 
   touch "$SENTINEL"
@@ -519,57 +394,31 @@ install_deployment() {
   echo "    source $WS/install/setup.bash"
 }
 
-# --------------------------------------------------------------------------
-# Dispatch helpers for both/upstream/custom
-# --------------------------------------------------------------------------
-_dispatch_holosoma() {
-  local fn="$1"
-  case "$VARIANT" in
-    upstream) "install_${fn}_upstream" ;;
-    custom)   "install_${fn}_custom" ;;
-    both)     "install_${fn}_upstream"; "install_${fn}_custom" ;;
-  esac
-}
 
 # --------------------------------------------------------------------------
 # Dispatch
 # --------------------------------------------------------------------------
 case "$TARGET" in
   all)
-    install_willow
-    install_gmr
-    install_interact
-    _dispatch_holosoma retargeting
-    _dispatch_holosoma mujoco
-    _dispatch_holosoma isaacgym
-    _dispatch_holosoma isaacsim
-    _dispatch_holosoma inference
-    install_deployment
+    install_willow; install_gmr; install_interact
+    install_holosoma_retargeting; install_holosoma_training; install_holosoma_inference
+    install_unitree_control_interface
     ;;
-  willow)      install_willow ;;
-  gmr)         install_gmr ;;
-  interact)    install_interact ;;
-  retargeting) _dispatch_holosoma retargeting ;;
-  mujoco)      _dispatch_holosoma mujoco ;;
-  isaacgym)    _dispatch_holosoma isaacgym ;;
-  isaacsim)    _dispatch_holosoma isaacsim ;;
-  inference)   _dispatch_holosoma inference ;;
-  deployment)  install_deployment ;;
+  willow)                    install_willow ;;
+  gmr)                       install_gmr ;;
+  interact)                  install_interact ;;
+  holosoma_retargeting)      install_holosoma_retargeting ;;
+  holosoma_training)         shift; install_holosoma_training "$@" ;;
+  holosoma_inference)        install_holosoma_inference ;;
+  unitree_control_interface) install_unitree_control_interface ;;
   *)
     echo "Unknown target: $TARGET"
-    echo "Usage: $0 [all|willow|gmr|interact|retargeting|mujoco|isaacgym|isaacsim|inference|deployment] [upstream|custom|both] [--no-warp]"
+    echo "Usage: $0 [all|willow|gmr|interact|holosoma_retargeting|holosoma_training|holosoma_inference|unitree_control_interface]"
     exit 1
     ;;
 esac
 
 echo ""
-echo "══════════════════════════════════════════"
-echo "  Done."
-echo "══════════════════════════════════════════"
-echo ""
-echo "  ~/.willow_deps/          willow_wbt, gmr, unitree_control_interface"
-echo "  ~/.holosoma_deps/        holosoma upstream envs"
-echo "  ~/.holosoma_custom_deps/ holosoma_custom envs"
-echo ""
-echo "To activate: source scripts/activate_willow.sh"
-echo ""
+echo "  ~/.willow_deps/     willow_wbt, gmr, interact, unitree_control_interface"
+echo "  ~/.holosoma_deps/   holosoma_custom envs (hs*)"
+echo "  To activate: source scripts/activate_willow.sh"
